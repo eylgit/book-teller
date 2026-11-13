@@ -10,7 +10,7 @@ This file says how a change is made here. It stays short: before a line is added
 3. **Test first.** Write a test that fails, and see it fail. Then write the code.
 4. **Review.** A second agent, in a fresh session, reviews the change. Its findings are hints, not a verdict.
 5. **Code-review check.** Stop. Show the maintainer the findings, and what you want to do with each. Wait for "go".
-6. **Then the change goes in.**
+6. **Then the change goes in.** The maintainer commits; the agent never does. It proposes the commit message.
 
 A very small change, such as a spelling mistake, skips both stops. Say so in one line.
 
