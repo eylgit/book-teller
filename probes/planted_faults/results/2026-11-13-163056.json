@@ -1,0 +1,199 @@
+{
+  "caught": [
+    "F01",
+    "F02",
+    "F03",
+    "F04",
+    "F05",
+    "F06",
+    "F07",
+    "F08",
+    "F09",
+    "F10"
+  ],
+  "missed": [
+    "F11",
+    "F12"
+  ],
+  "blunt_caught": [
+    "F01",
+    "F03",
+    "F05",
+    "F07",
+    "F09"
+  ],
+  "false_alarms": [
+    {
+      "sentence": 3,
+      "kind": 5,
+      "paragraph": 1,
+      "quote": "but not of the abstention-habit or the moderation-habit or the courage-habit.",
+      "reason": "The author gives examples of habits not commonly named, but does not assert that 'nobody' ever talks of them, so 'nobody' is too absolute.",
+      "catches": null,
+      "quote_found": true,
+      "sentence_text": "We talk of the smoking habit and the drinking habit, but nobody talks of the courage habit."
+    },
+    {
+      "sentence": 0,
+      "kind": 6,
+      "paragraph": 16,
+      "quote": "It is an invariable part of our Hindoo life to retire for at least half an hour daily into silence, to relax our muscles, govern our breathing, and meditate on eternal things.",
+      "reason": "The script omits James's important practical example and recommendation that teachers encourage daily relaxation/meditation and moderation of physical tension in pupils.",
+      "catches": null,
+      "quote_found": true,
+      "sentence_text": null
+    }
+  ],
+  "flags": [
+    {
+      "sentence": 2,
+      "kind": 5,
+      "paragraph": 1,
+      "quote": "when people use the word 'habit,' in the majority of instances it is a bad habit which they have in mind.",
+      "reason": "The chapter says 'in the majority of instances', not 'always', so 'always' is too strong.",
+      "catches": "F10",
+      "quote_found": true,
+      "sentence_text": "James starts with the word itself: when people say \"habit\", they always mean a bad one."
+    },
+    {
+      "sentence": 3,
+      "kind": 5,
+      "paragraph": 1,
+      "quote": "but not of the abstention-habit or the moderation-habit or the courage-habit.",
+      "reason": "The author gives examples of habits not commonly named, but does not assert that 'nobody' ever talks of them, so 'nobody' is too absolute.",
+      "catches": null,
+      "quote_found": true,
+      "sentence_text": "We talk of the smoking habit and the drinking habit, but nobody talks of the courage habit."
+    },
+    {
+      "sentence": 7,
+      "kind": 1,
+      "paragraph": 3,
+      "quote": "I believe that we are subject to the law of habit in consequence of the fact that we have bodies.",
+      "reason": "James attributes habit to bodily/nervous plasticity, not to free will.",
+      "catches": "F03",
+      "quote_found": true,
+      "sentence_text": "James believes it is because we have free will."
+    },
+    {
+      "sentence": 10,
+      "kind": 3,
+      "paragraph": 3,
+      "quote": "just as a sheet of paper or a coat, once creased or folded, tends to fall forever afterward into the same identical folds.",
+      "reason": "James uses the paper/coat creasing simile, not a river; the river example does not match the text.",
+      "catches": "F05",
+      "quote_found": true,
+      "sentence_text": "He compares this to a river: it never flows over the same ground twice."
+    },
+    {
+      "sentence": 12,
+      "kind": 1,
+      "paragraph": 4,
+      "quote": "Ninety-nine hundredths or, possibly, nine hundred and ninety-nine thousandths of our activity is purely automatic and habitual, from our rising in the morning to our lying down each night.",
+      "reason": "The chapter claims almost all activity is habitual (very large fraction), not 'about half' as the script states.",
+      "catches": "F01",
+      "quote_found": true,
+      "sentence_text": "James says that about half of what we do, from rising in the morning to lying down at night, is purely automatic and habitual."
+    },
+    {
+      "sentence": 21,
+      "kind": 1,
+      "paragraph": 8,
+      "quote": "I remember long ago reading in an Austrian paper the advertisement of a certain Rudolph Somebody, who promised fifty gulden reward to any one who after that date should find him at the wine-shop of Ambrosius So-and-so.",
+      "reason": "The chapter says the advertisement was in an Austrian paper, not a German one.",
+      "catches": "F02",
+      "quote_found": true,
+      "sentence_text": "His example is a man called Rudolph, who advertised in a German paper that he would pay fifty gulden to anyone who found him at a certain wine-shop."
+    },
+    {
+      "sentence": 24,
+      "kind": 2,
+      "paragraph": 9,
+      "quote": "Each lapse is like the letting fall of a ball of string which one is carefully winding up: a single slip undoes more than a great many turns will wind again.",
+      "reason": "The chapter says a single lapse undoes more than many turns will wind again, but the script's wording ('you lose a turn, and you wind it again') reverses the intended meaning.",
+      "catches": "F06",
+      "quote_found": true,
+      "sentence_text": "Each lapse is like dropping a ball of string that you are carefully winding up: you lose a turn, and you wind it again."
+    },
+    {
+      "sentence": 25,
+      "kind": 2,
+      "paragraph": 11,
+      "quote": "It is not in the moment of their forming, but in the moment of their producing motor effects, that resolves and aspirations communicate the new 'set' to the brain.",
+      "reason": "The chapter insists the brain is set when resolutions produce motor action, not at the moment of forming, so the script's claim of both moments is incorrect.",
+      "catches": "F04",
+      "quote_found": true,
+      "sentence_text": "Resolves give the brain its new set in the moment when they are formed, and again in the moment when they produce action."
+    },
+    {
+      "sentence": 31,
+      "kind": 5,
+      "paragraph": 14,
+      "quote": "The loss of these tastes is a loss of happiness, and may possibly be injurious to the intellect, and more probably to the moral character, by enfeebling the emotional part of our nature.",
+      "reason": "The chapter hedges that loss 'may possibly' injure the intellect; the script's 'certainly injurious' is too strong.",
+      "catches": "F09",
+      "quote_found": true,
+      "sentence_text": "Darwin thought that the loss of these tastes was a loss of happiness, and that it is certainly injurious to the intellect."
+    },
+    {
+      "sentence": 32,
+      "kind": 4,
+      "paragraph": 15,
+      "quote": "but, if not persistently fed with the appropriate matter, instead of growing into a powerful and necessary habit, it atrophies and dies, choked by the rival interests to which the daily food is given.",
+      "reason": "The author attributes loss of tastes to neglect and atrophy, not to an inevitable consequence of a scientific life, so the script's general conclusion about scientists is not drawn by James.",
+      "catches": "F08",
+      "quote_found": true,
+      "sentence_text": "James concludes that people who give their lives to science, as Darwin did, cannot keep a taste for poetry."
+    },
+    {
+      "sentence": 38,
+      "kind": 1,
+      "paragraph": 19,
+      "quote": "for sudden conversions, however infrequent they may be, unquestionably do occur.",
+      "reason": "James explicitly allows that sudden conversions do occur, so saying he answers that they 'never really occur' misstates him.",
+      "catches": "F07",
+      "quote_found": true,
+      "sentence_text": "He answers that sudden conversions never really occur, and so his laws stand: an old habit cannot be broken at one stroke."
+    },
+    {
+      "sentence": 0,
+      "kind": 6,
+      "paragraph": 16,
+      "quote": "It is an invariable part of our Hindoo life to retire for at least half an hour daily into silence, to relax our muscles, govern our breathing, and meditate on eternal things.",
+      "reason": "The script omits James's important practical example and recommendation that teachers encourage daily relaxation/meditation and moderation of physical tension in pupils.",
+      "catches": null,
+      "quote_found": true,
+      "sentence_text": null
+    }
+  ],
+  "verdict": "go on",
+  "date": "2026-11-13 16:30:56",
+  "deployment": "gpt-5-mini",
+  "model": "gpt-5-mini-2025-08-07",
+  "usage": {
+    "completion_tokens": 5913,
+    "completion_tokens_details": {
+      "accepted_prediction_tokens": 0,
+      "audio_tokens": 0,
+      "reasoning_tokens": 4992,
+      "rejected_prediction_tokens": 0
+    },
+    "latency_checkpoint": {
+      "engine_tbt_ms": 6,
+      "engine_ttft_ms": 125,
+      "engine_ttlt_ms": 37813,
+      "pre_inference_ms": 98,
+      "service_tbt_ms": 6,
+      "service_ttft_ms": 316,
+      "service_ttlt_ms": 37985,
+      "user_visible_ttft_ms": 218
+    },
+    "prompt_tokens": 5343,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cached_tokens": 0
+    },
+    "total_tokens": 11256
+  },
+  "seconds": 39.0
+}

@@ -1,6 +1,27 @@
 # Probe: can the model find planted faults?
 
-**State:** the plan check is passed. The work is in progress.
+**State:** done on 2026-11-13. The verdict is "go on".
+
+## The result
+
+One run on `gpt-5-mini` (version 2025-08-07). The report: `probes/planted_faults/results/2026-11-13-163056.json`.
+
+| What | Result |
+|---|---|
+| Faults caught | 10 of 12 |
+| Faults of kinds 1 to 5 (a changed sentence) | 10 of 10, the blunt and the subtle ones |
+| Faults of kind 6 (a point left out) | 0 of 2 |
+| False alarms | 2. Both are fair: one sentence of the clean script says "nobody" where the author is less absolute, and the script does leave out the point of the other flag |
+| Quotes found word for word in the chapter | 12 of 12 |
+| The fixed shape of the answer | Held |
+| Tokens | 5,343 in and 5,913 out, of which 4,992 are the model's thinking |
+| Time | 39 seconds |
+
+What it means:
+
+- **The model can find faults in a changed sentence.** It also proved each one with a real quote.
+- **It did not find the two points that were left out.** It did flag another point that the script leaves out, so it looks for this kind, but it does not find every case. With the limit named in "The review" below, kind 6 is the open question for the real checker.
+- **It is one run of 12 faults.** It says "can it find faults at all": yes. It does not say how many it finds on average.
 
 A probe is a small early test with a yes-or-no answer. It runs before anything is built on the answer.
 
