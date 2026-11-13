@@ -1,6 +1,6 @@
 # Book Teller
 
-Book Teller turns a book into a podcast series: the book told well by one voice, about 30 minutes an episode, in English or Cantonese.
+Book Teller turns a book into a podcast series: the book told well by one voice, about 30 minutes an episode, in English.
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
