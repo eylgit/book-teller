@@ -5,7 +5,7 @@ This file says how a change is made here. It stays short: before a line is added
 
 ## A task
 
-1. **Plan.** Write a short plan as a file in `docs/plans/`: the goal, the exit criteria (what must be true when the work is done), and the list of test cases. The plan is committed before the code.
+1. **Plan.** Each task gets its own folder, `docs/plans/YYYY-MM-DD-short_title/`. It holds `plan.md` and any file that supports the plan. The plan is short: the goal, the exit criteria (what must be true when the work is done), and the list of test cases. It is committed before the code.
 2. **Plan check.** Stop. Show the maintainer the plan in about ten lines, and the test cases as a list. Wait for "go".
 3. **Test first.** Write a test that fails, and see it fail. Then write the code.
 4. **Review.** A second agent, in a fresh session, reviews the change. Its findings are hints, not a verdict.
