@@ -1,0 +1,98 @@
+[
+  {
+    "id": "F01",
+    "kind": 1,
+    "level": "blunt",
+    "original": "James says that ninety-nine hundredths of what we do, from rising in the morning to lying down at night, is purely automatic and habitual.",
+    "planted": "James says that about half of what we do, from rising in the morning to lying down at night, is purely automatic and habitual.",
+    "proof": "Ninety-nine hundredths or, possibly, nine hundred and ninety-nine thousandths of our activity is purely automatic and habitual"
+  },
+  {
+    "id": "F02",
+    "kind": 1,
+    "level": "subtle",
+    "original": "His example is a man called Rudolph, who advertised in an Austrian paper that he would pay fifty gulden to anyone who found him at a certain wine-shop.",
+    "planted": "His example is a man called Rudolph, who advertised in a German paper that he would pay fifty gulden to anyone who found him at a certain wine-shop.",
+    "proof": "I remember long ago reading in an Austrian paper the advertisement of a certain Rudolph Somebody"
+  },
+  {
+    "id": "F03",
+    "kind": 2,
+    "level": "blunt",
+    "original": "James believes it is because we have bodies.",
+    "planted": "James believes it is because we have free will.",
+    "proof": "I believe that we are subject to the law of habit in consequence of the fact that we have bodies."
+  },
+  {
+    "id": "F04",
+    "kind": 2,
+    "level": "subtle",
+    "original": "Resolves give the brain its new set not in the moment when they are formed, but in the moment when they produce action.",
+    "planted": "Resolves give the brain its new set in the moment when they are formed, and again in the moment when they produce action.",
+    "proof": "It is not in the moment of their forming, but in the moment of their producing motor effects, that resolves and aspirations communicate the new 'set' to the brain."
+  },
+  {
+    "id": "F05",
+    "kind": 3,
+    "level": "blunt",
+    "original": "He compares this to a sheet of paper or a coat: once it is folded, it tends to fall into the same folds ever after.",
+    "planted": "He compares this to a river: it never flows over the same ground twice.",
+    "proof": "just as a sheet of paper or a coat, once creased or folded, tends to fall forever afterward into the same identical folds."
+  },
+  {
+    "id": "F06",
+    "kind": 3,
+    "level": "subtle",
+    "original": "Each lapse is like dropping a ball of string that you are carefully winding up: a single slip undoes more than a great many turns will wind again.",
+    "planted": "Each lapse is like dropping a ball of string that you are carefully winding up: you lose a turn, and you wind it again.",
+    "proof": "a single slip undoes more than a great many turns will wind again."
+  },
+  {
+    "id": "F07",
+    "kind": 4,
+    "level": "blunt",
+    "original": "He answers that sudden conversions, however infrequent, unquestionably do occur, and that they do not contradict his laws: new habits can be launched when there are new stimuli and new excitements.",
+    "planted": "He answers that sudden conversions never really occur, and so his laws stand: an old habit cannot be broken at one stroke.",
+    "proof": "for sudden conversions, however infrequent they may be, unquestionably do occur."
+  },
+  {
+    "id": "F08",
+    "kind": 4,
+    "level": "subtle",
+    "original": "James concludes that an interest which is not persistently fed does not grow into a habit: it atrophies and dies.",
+    "planted": "James concludes that people who give their lives to science, as Darwin did, cannot keep a taste for poetry.",
+    "proof": "if not persistently fed with the appropriate matter, instead of growing into a powerful and necessary habit, it atrophies and dies"
+  },
+  {
+    "id": "F09",
+    "kind": 5,
+    "level": "blunt",
+    "original": "Darwin thought that the loss of these tastes was a loss of happiness, and that it may possibly be injurious to the intellect.",
+    "planted": "Darwin thought that the loss of these tastes was a loss of happiness, and that it is certainly injurious to the intellect.",
+    "proof": "and may possibly be injurious to the intellect"
+  },
+  {
+    "id": "F10",
+    "kind": 5,
+    "level": "subtle",
+    "original": "James starts with the word itself: when people say \"habit\", in most cases they mean a bad one.",
+    "planted": "James starts with the word itself: when people say \"habit\", they always mean a bad one.",
+    "proof": "in the majority of instances it is a bad habit which they have in mind."
+  },
+  {
+    "id": "F11",
+    "kind": 6,
+    "level": "blunt",
+    "original": "A further maxim: seize the very first possible opportunity to act on every resolution you make.",
+    "planted": null,
+    "proof": "Seize the very first possible opportunity to act on every resolution you make"
+  },
+  {
+    "id": "F12",
+    "kind": 6,
+    "level": "subtle",
+    "original": "The more of the details of daily life we hand over to habit, the more our higher powers of mind are set free for their proper work.",
+    "planted": null,
+    "proof": "The more of the details of our daily life we can hand over to the effortless custody of automatism, the more our higher powers of mind will be set free for their own proper work."
+  }
+]

@@ -82,6 +82,23 @@ In the tests a fake function stands in for the model call.
 - **The model may not hold the fixed shape.** Then test case 11 shows it, and that is a finding too.
 - **Cost.** One request of about 8,000 tokens: under 5 US cents at the list price.
 
+## The review, and what was left as it is
+
+A second agent reviewed the change and reported 14 findings. Three were fixed, each with a test:
+
+- The script numbered its maxims, so the maxim that fault F11 removes could be found by counting. The numbering is gone.
+- A flag for a point that is left out could be given to the fault in the sentence beside it. Such a flag is now matched by its paragraph first.
+- No test would have failed if the program had sent the clean script to the model.
+
+The rest are known limits. The probe only has to say "good enough to go on, yes or no", so they are written down here and not fixed:
+
+- **A point that is left out cannot be marked well by code.** The script is short, so it leaves out many points, and a flag for any of them counts as a false alarm. Any flag of kind 6 on the right paragraph counts as a catch. The report prints the model's reason under each catch: the two catches of kind 6 are read by the maintainer.
+- **Some planted sentences do not fit the sentence beside them** (F03, F05, F07, F08). A model may find these without the chapter.
+- **The blunt and the subtle fault of kind 5 are about equally easy.**
+- **When the model's answer has the wrong shape,** the answer is not saved.
+- **A quote that the model copies with another kind of dash** is marked "not found".
+- **A few sentences of the clean script are a little stronger than the chapter,** such as "leaves its scar" for "its never-so-little scar".
+
 ## How it is undone
 
 The probe is one folder. Deleting the folder removes all of it. Nothing is made in the cloud.
