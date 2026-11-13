@@ -1,0 +1,23 @@
+# Secrets: never in the repository
+.env
+.env.*
+*.pem
+*.key
+
+# Terraform: the state file can hold secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# The coding agent: settings of one machine only
+.claude/settings.local.json
+
+# macOS
+.DS_Store
