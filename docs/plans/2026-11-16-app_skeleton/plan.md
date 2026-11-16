@@ -1,6 +1,6 @@
 # Task 1: the skeleton of the app
 
-**State:** planned on 2026-11-16. Waiting for the maintainer's "go".
+**State:** planned on 2026-11-16. The maintainer said yes to the plan and to the six dependencies on the same day. No code yet.
 
 It is the first task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
