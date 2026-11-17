@@ -1,0 +1,6 @@
+# Everything stays out of the image, except what the Dockerfile copies.
+*
+!pyproject.toml
+!uv.lock
+!src
+**/__pycache__

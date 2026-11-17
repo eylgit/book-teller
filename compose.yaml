@@ -1,0 +1,13 @@
+# Starts the app on your own machine:  docker compose up --build
+# Then open http://localhost:8000
+
+services:
+  app:
+    build: ./backend
+    ports:
+      # Only this machine can reach the app.
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # The folder backend/src of this machine takes the place of the copy in the
+      # image, read-only. So a change to the page shows after a reload, with no new build.
+      - ./backend/src:/app/src:ro

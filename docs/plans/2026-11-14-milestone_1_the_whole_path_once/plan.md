@@ -1,6 +1,6 @@
 # Milestone 1: the whole path once
 
-**State:** planned on 2026-11-14. No task has started.
+**State:** planned on 2026-11-14. Task 1 is built: [its plan](../2026-11-16-app_skeleton/plan.md).
 
 ## The goal
 
@@ -67,7 +67,7 @@ The order is by risk. The cloud is the risky part, so the ship path comes first,
 
 | # | Task |
 |---|---|
-| 1 | The skeleton: a FastAPI app with one page, one test, the lockfile, the linter and the type checker. It runs with Docker Compose |
+| 1 | The skeleton: a FastAPI app with one page, its tests, the lockfile, the linter and the type checker. It runs with Docker Compose |
 | 2 | The pipeline: the tests on every pull request, a fixed version of the build machine, a protected main branch, the full merge rule |
 | 3 | The cloud as a Terraform file, and deploy on merge. The empty page is live, and the app has its managed identity |
 | 4 | The model call: structured output, the thinking setting, a timeout, a fake model for the tests |

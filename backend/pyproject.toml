@@ -1,0 +1,40 @@
+[project]
+name = "book-teller"
+version = "0.1.0"
+description = "Turns a book into a podcast series, and checks every script against the book."
+license = "MIT"
+requires-python = ">=3.14"
+dependencies = [
+    "fastapi>=0.163.1",
+    "uvicorn>=0.54.0",
+]
+
+# The tests: only the folder "tests". The app's code is found in "src".
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+# A warning fails the test run. A warning that a library will stop working
+# with another one was once left unseen.
+filterwarnings = ["error"]
+
+# The linter and the formatter.
+[tool.ruff]
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+# E, F: mistakes and style. I: the order of imports. B: likely bugs. UP: old Python.
+select = ["E", "F", "I", "B", "UP"]
+
+# The type checker, in strict mode.
+[tool.mypy]
+strict = true
+files = ["src", "tests"]
+mypy_path = "src"
+
+[dependency-groups]
+dev = [
+    "httpx2>=2.16.2",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.5",
+]
