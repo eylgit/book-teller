@@ -1,0 +1,78 @@
+"""Tests of the Dockerfile: is every image named by its digest?
+
+A tag, such as "python:3.14-slim", is a name that its owner can move to
+another image. A digest is the fingerprint of one exact image: "@sha256:"
+and 64 characters. With it, every build starts from the same image.
+
+These tests only read the file. They need no Docker and no network.
+"""
+
+import re
+from pathlib import Path
+
+DOCKERFILE = Path(__file__).parent.parent / "Dockerfile"
+
+# A real digest: the name of the method, then 64 characters from 0-9 and a-f.
+DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
+
+
+def images_in(dockerfile: str) -> list[str]:
+    """Gives every image that a Dockerfile names.
+
+    An image is named in two places: after "FROM", and after "COPY --from=".
+    """
+    images: list[str] = []
+    for line in dockerfile.splitlines():
+        words = line.split()
+        if not words:
+            continue
+        if words[0] == "FROM":
+            # Words that start with "--" are settings, not the image.
+            names = [word for word in words[1:] if not word.startswith("--")]
+            images.append(names[0])
+        elif words[0] == "COPY":
+            for word in words[1:]:
+                if word.startswith("--from="):
+                    images.append(word.removeprefix("--from="))
+    return images
+
+
+def without_digest(images: list[str]) -> list[str]:
+    return [image for image in images if not DIGEST.search(image)]
+
+
+def test_every_image_of_the_dockerfile_has_a_digest() -> None:
+    images = images_in(DOCKERFILE.read_text())
+
+    assert without_digest(images) == []
+
+
+def test_the_dockerfile_names_two_images() -> None:
+    # The test above is worth nothing if the finder sees nothing.
+    images = images_in(DOCKERFILE.read_text())
+
+    assert len(images) == 2, images
+
+
+def test_the_finder_catches_a_tag_alone_and_a_short_digest() -> None:
+    good = "python:3.14-slim@sha256:" + "a" * 64
+    dockerfile = f"""
+        FROM python:3.14-slim
+        FROM --platform=linux/amd64 {good}
+        COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /bin/uv
+        COPY --from=example.com/tool:1@sha256:abc123 /tool /bin/tool
+        COPY pyproject.toml uv.lock ./
+    """
+    images = images_in(dockerfile)
+
+    assert images == [
+        "python:3.14-slim",
+        good,
+        "ghcr.io/astral-sh/uv:0.12.6",
+        "example.com/tool:1@sha256:abc123",
+    ]
+    assert without_digest(images) == [
+        "python:3.14-slim",
+        "ghcr.io/astral-sh/uv:0.12.6",
+        "example.com/tool:1@sha256:abc123",
+    ]
