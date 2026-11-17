@@ -16,7 +16,8 @@ RUN useradd --create-home --uid 1000 app
 ENV UV_COMPILE_BYTECODE=1
 
 # The libraries, at the exact versions of the lockfile, without the
-# development tools. This layer is built again only when the lockfile changes.
+# development tools. This layer is built again only when one of the two
+# copied files changes.
 # --no-cache: the downloads are not kept in the image.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --locked --no-dev --no-install-project --no-cache
