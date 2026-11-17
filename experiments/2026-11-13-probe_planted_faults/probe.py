@@ -5,7 +5,7 @@ against the chapter, and counts how many of the 12 the model finds.
 
 Run from the top folder of the repository:
 
-    python3 probes/planted_faults/probe.py --resource NAME --resource-group NAME --deployment NAME
+    python3 experiments/2026-11-13-probe_planted_faults/probe.py --resource NAME --resource-group NAME --deployment NAME
 
 It uses only what Python brings with it. It asks the Azure CLI for the key
 each time, and never saves or prints the key.

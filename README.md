@@ -4,7 +4,7 @@ Book Teller turns a book into a podcast series: the book told well by one voice,
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
-**Status:** the skeleton. The app shows one page and answers one health address; it tells no book yet. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md).
+**Status:** the skeleton. The app shows one page and answers one health address; it tells no book yet. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
 
 ## Run it
 
@@ -24,7 +24,7 @@ A change to the page, `backend/src/book_teller/static/index.html`, shows after a
 |---|---|
 | `backend/` | The Python project: the web app, its tests, its lockfile and its Dockerfile |
 | `docs/plans/` | One plan for each piece of work |
-| `probes/` | Small early tests, kept as they were run |
+| `experiments/` | One-time experiments, kept as they were run. Each folder has the name of its plan folder in `docs/plans/` |
 
 ## Run the checks
 

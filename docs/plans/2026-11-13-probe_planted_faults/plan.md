@@ -4,7 +4,7 @@
 
 ## The result
 
-One run on `gpt-5-mini` (version 2025-08-07). The report: `probes/planted_faults/results/2026-11-13-163056.json`.
+One run on `gpt-5-mini` (version 2025-08-07). The report: `experiments/2026-11-13-probe_planted_faults/results/2026-11-13-163056.json`.
 
 | What | Result |
 |---|---|
@@ -33,7 +33,7 @@ A planted fault is a mistake put into a script on purpose. The probe plants 12 o
 
 ## What is built
 
-Everything lives in `probes/planted_faults/`.
+Everything lives in `experiments/2026-11-13-probe_planted_faults/`. It was moved there from `probes/planted_faults/` on 2026-11-17, with no change to the code: an experiment's folder has the name of its plan folder.
 
 | File | What it holds |
 |---|---|
@@ -70,7 +70,7 @@ Each fault names the sentence of the script that it changes, the new sentence, a
 
 ## Exit criteria
 
-1. `python3 -m unittest discover -s probes/planted_faults` passes, with no network and no key.
+1. `python3 -m unittest discover -s experiments/2026-11-13-probe_planted_faults` passes, with no network and no key.
 2. One real run on the deployed model prints, for each of the 12 faults, caught or missed; the false alarms; the tokens used; the seconds. Its report is in `results/`.
 3. The report states one of three verdicts:
    - **Too easy:** 11 or 12 caught. Half of the faults are replaced with harder ones, and the probe runs again.

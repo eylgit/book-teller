@@ -2,7 +2,7 @@
 
 Run from the top folder of the repository:
 
-    python3 -m unittest discover -s probes/planted_faults
+    python3 -m unittest discover -s experiments/2026-11-13-probe_planted_faults
 """
 
 import io

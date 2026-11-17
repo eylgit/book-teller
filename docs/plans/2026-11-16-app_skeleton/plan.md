@@ -25,7 +25,7 @@ Nothing here talks to a model, a database or the cloud.
 | `compose.yaml` | Docker Compose: one command starts the app on the maintainer's machine |
 | `README.md` | Three new parts: how to run it, the folders, and how to run the checks |
 
-**The folders.** The Python project lives in its own folder, `backend/`. Only what belongs to the whole repository stays at the top: the README, `compose.yaml`, `docs/` and `probes/`. A later part, such as the files that describe the cloud, gets its own folder beside `backend/`. The `uv` commands below are run inside `backend/`.
+**The folders.** The Python project lives in its own folder, `backend/`. Only what belongs to the whole repository stays at the top: the README, `compose.yaml`, `docs/` and `experiments/`. A later part, such as the files that describe the cloud, gets its own folder beside `backend/`. The `uv` commands below are run inside `backend/`.
 
 **The two routes.**
 
