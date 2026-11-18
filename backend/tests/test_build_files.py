@@ -19,21 +19,34 @@ DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 def images_in(dockerfile: str) -> list[str]:
     """Gives every image that a Dockerfile names.
 
-    An image is named in two places: after "FROM", and after "COPY --from=".
+    An image is named in three places: after "FROM", after "COPY --from=",
+    and after "from=" inside "RUN --mount=". Docker reads an instruction in
+    upper or lower case, and over several lines that end with a backslash.
     """
+    # A backslash at the end of a line joins it to the next line.
+    joined = re.sub(r"\\[ \t]*\n", " ", dockerfile)
+
     images: list[str] = []
-    for line in dockerfile.splitlines():
+    for line in joined.splitlines():
         words = line.split()
         if not words:
             continue
-        if words[0] == "FROM":
+        instruction = words[0].upper()
+        if instruction == "FROM":
             # Words that start with "--" are settings, not the image.
             names = [word for word in words[1:] if not word.startswith("--")]
             images.append(names[0])
-        elif words[0] == "COPY":
+        elif instruction == "COPY":
             for word in words[1:]:
                 if word.startswith("--from="):
                     images.append(word.removeprefix("--from="))
+        elif instruction == "RUN":
+            for word in words[1:]:
+                if word.startswith("--mount="):
+                    # The settings of a mount are parted by commas.
+                    for setting in word.removeprefix("--mount=").split(","):
+                        if setting.startswith("from="):
+                            images.append(setting.removeprefix("from="))
     return images
 
 
@@ -75,4 +88,22 @@ def test_the_finder_catches_a_tag_alone_and_a_short_digest() -> None:
         "python:3.14-slim",
         "ghcr.io/astral-sh/uv:0.12.6",
         "example.com/tool:1@sha256:abc123",
+    ]
+
+
+def test_the_finder_reads_every_way_to_name_an_image() -> None:
+    # Three ways that Docker accepts, and that the finder once did not see:
+    # lower case, an instruction over two lines, and an image inside a mount.
+    dockerfile = """
+        from example.com/lower:1
+        COPY \\
+            --from=example.com/two-lines:1 /tool /bin/tool
+        RUN --mount=type=bind,from=example.com/mount:1,target=/bin/tool tool
+        # FROM example.com/only-a-comment:1
+    """
+
+    assert images_in(dockerfile) == [
+        "example.com/lower:1",
+        "example.com/two-lines:1",
+        "example.com/mount:1",
     ]

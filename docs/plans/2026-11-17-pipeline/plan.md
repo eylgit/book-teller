@@ -1,6 +1,6 @@
 # Task 2: the pipeline
 
-**State:** planned on 2026-11-17. The maintainer said yes to the plan on the same day, with the three proposed answers below. Nothing is built.
+**State:** planned on 2026-11-17. The maintainer said yes to the plan on the same day, with the three answers below. The pipeline is built and reviewed, and `main` is protected. What the review changed is at the end.
 
 It is the second task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -48,14 +48,14 @@ The pipeline only tests. Building the image for the cloud and deploying it belon
 
 ## The merge rule
 
-One person works here, so no second person reviews. The rule says what stands in that place.
-
 1. **Every change goes in by a pull request,** also a plan and a spelling mistake. The pipeline must pass.
-2. **Most pull requests are merged by the maintainer as soon as the pipeline passes.** Before that, the change went through the steps of [CLAUDE.md](../../../CLAUDE.md): the plan check, the test first, the review by a second agent, the code-review check.
-3. **A pull request that changes the guard or anything about secrets waits** until the maintainer has read every changed line. Its page says how each file was checked.
+2. **Before the merge,** the change went through the steps of [CLAUDE.md](../../../CLAUDE.md): the plan check, the test first, the review by a second agent, the code-review check.
+3. **A pull request that changes anything about secrets, or the code that checks the model's answer,** is read line by line by the maintainer before the merge.
 4. **A pull request is merged with a merge commit,** not squashed into one commit. So the history keeps each step: the plan, the failing test, the code.
 
-A plan is the first commit on the branch of its task, so it is still committed before the code.
+A plan is the first commit on the branch of its task, so it is still committed before the code. In this task it was not: the plan went in together with the first tests, in one commit. It was left so, because the fix would have been a push by force.
+
+**No pull request from outside.** The repository is public to read. Only a collaborator, somebody whom the owner invited, can open a pull request, and issues and the wiki are off.
 
 ## Decided by the maintainer
 
@@ -78,7 +78,7 @@ No new library in the project. On the build machine, the pipeline installs `uv` 
 5. The smoke test passes in the pipeline and on the maintainer's machine. It was seen to fail once: with the line `USER app` taken out of the Dockerfile, it must say no.
 6. `main` is protected. The maintainer sees GitHub refuse two things: a push straight to `main`, and the merge of a pull request whose run failed.
 7. `CLAUDE.md` and the README hold the merge rule.
-8. The pipeline holds no secret and needs none. A pull request from a copy of the repository made by a stranger (a fork) cannot reach one.
+8. The pipeline holds no secret and needs none. A stranger cannot start it: GitHub takes a pull request only from a collaborator, and Azure Pipelines builds no pull request from a fork (a copy of the repository under another account).
 
 ## Test cases
 
@@ -115,7 +115,7 @@ Seen once by the maintainer, on GitHub:
 ## What could go wrong
 
 - **The logs are not public.** Microsoft has retired public projects in Azure DevOps, so the project is private. A visitor sees on GitHub whether a run passed or failed, with a summary, but cannot open the full log.
-- **A pull request from a fork runs a stranger's code on the build machine.** The machine is thrown away after the run and holds no secret today. Task 3 brings the login to Azure, so the setting for forks is looked at now: no secret for a fork, and a comment by the maintainer before a fork's pull request is built. The names and the defaults of these settings are read on the settings page, not from memory.
+- **A pull request from a fork would run a stranger's steps on the build machine,** and could use up the free minutes. Task 3 brings the login to Azure, so this door is closed now, twice. On GitHub, the setting "Pull requests" is "Collaborators only". In Azure DevOps, the setting "Limit building pull requests from forked GitHub repositories" is on, with "Disable building pull requests from forked repositories". Both settings are made by hand and are not in a file of this repository.
 - **A required check that never reports locks every merge.** That happens when a pipeline leaves out some changes, e.g. changes to documents only. So this pipeline runs on every pull request, with no filter on paths.
 - **The free runs.** 1,800 minutes a month, one run at a time. A run is expected to take a few minutes; that is not measured yet.
 - **One image for two kinds of machine.** The maintainer's machine and the build machine have different processors. The digest must be the one of the list that holds both forms of the image, not of one form.
@@ -125,3 +125,22 @@ Seen once by the maintainer, on GitHub:
 ## How it is undone
 
 Delete the ruleset on GitHub and the pipeline in Azure DevOps; take the four new files and the changed lines back. Nothing costs money: the runs are inside the free 1,800 minutes.
+
+## What was seen
+
+- **The first run failed** at the step "Tests": `1 failed, 9 passed`. GitHub then refused the merge: "Required checks failing".
+- **The second run passed,** after the digests went into the Dockerfile. It took 54 seconds.
+- **The smoke test said no once:** with the line `USER app` taken out of the Dockerfile, it stopped with "FAILED: the app runs as root".
+
+## What the review changed
+
+A second agent reviewed the change in a fresh session. The maintainer decided on each finding.
+
+- **The smoke test could take down the maintainer's own running app.** It now runs Docker Compose under a name of its own, and stops with a clear sentence when port 8000 is taken.
+- **The code that finds the images did not see three ways to name one:** lower case, an instruction over two lines, and an image inside `RUN --mount=`. A test case for the three is new.
+- **A check of the page could fail by chance** once the page grows: `curl` was still sending while `grep` had already stopped. The script now lets `curl` end first.
+- **A run that hangs** is stopped after 10 minutes, not after 60.
+- **When the app does not start,** the smoke test prints the last lines that the app wrote. And it asks for the number of the user, not the name: the number 0 is root under any name.
+- **Left for its own pull request, the next one:** the pinned version of `uv`, 0.12.6, has a security notice (GHSA-hq85-5cpj-mr62), fixed in 0.13.4.
+- **Left for task 3:** when the Dockerfile gets a second stage, the code that finds the images must learn the name of a stage, which is not an image.
+- **Not taken:** a test that the version of `uv` is the same in the pipeline and in the Dockerfile. No mistake has happened there yet.

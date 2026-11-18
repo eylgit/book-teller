@@ -22,31 +22,37 @@ variables:
   # The version of uv that wrote the lockfile. The same as in backend/Dockerfile.
   uvVersion: 0.12.6
 
-steps:
-  - script: pipx install uv==$(uvVersion)
-    displayName: Install uv
+jobs:
+  - job: checks
+    displayName: Tests and checks
+    # A run takes about one minute. A run that hangs is stopped after ten,
+    # not after the 60 minutes that Azure Pipelines allows by itself.
+    timeoutInMinutes: 10
+    steps:
+      - script: pipx install uv==$(uvVersion)
+        displayName: Install uv
 
-  # Python and the libraries, at the exact versions of the lockfile.
-  - script: uv sync --locked
-    displayName: Install from the lockfile
-    workingDirectory: backend
+      # Python and the libraries, at the exact versions of the lockfile.
+      - script: uv sync --locked
+        displayName: Install from the lockfile
+        workingDirectory: backend
 
-  - script: uv run pytest
-    displayName: Tests
-    workingDirectory: backend
+      - script: uv run pytest
+        displayName: Tests
+        workingDirectory: backend
 
-  - script: uv run ruff check
-    displayName: Linter
-    workingDirectory: backend
+      - script: uv run ruff check
+        displayName: Linter
+        workingDirectory: backend
 
-  - script: uv run ruff format --check
-    displayName: Formatter
-    workingDirectory: backend
+      - script: uv run ruff format --check
+        displayName: Formatter
+        workingDirectory: backend
 
-  - script: uv run mypy
-    displayName: Type checker
-    workingDirectory: backend
+      - script: uv run mypy
+        displayName: Type checker
+        workingDirectory: backend
 
-  # Builds the image, starts it, and asks it a few questions.
-  - script: bash scripts/smoke_test.sh
-    displayName: Smoke test of the image
+      # Builds the image, starts it, and asks it a few questions.
+      - script: bash scripts/smoke_test.sh
+        displayName: Smoke test of the image
