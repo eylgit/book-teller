@@ -21,6 +21,11 @@ pool:
 variables:
   # The version of uv. The same as in backend/Dockerfile.
   uvVersion: 0.13.8
+  # The version of Terraform. The same as in infra/main.tf and on the
+  # maintainer's machine. The checksum is the fingerprint of the download,
+  # from HashiCorp's file of checksums for this version.
+  terraformVersion: 1.17.2
+  terraformSha256: e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b
 
 jobs:
   - job: checks
@@ -56,3 +61,36 @@ jobs:
       # Builds the image, starts it, and asks it a few questions.
       - script: bash scripts/smoke_test.sh
         displayName: Smoke test of the image
+
+      # The build machine has no Terraform of its own. The download is
+      # used only if its fingerprint is the one written above.
+      - script: |
+          set -euo pipefail
+          curl --silent --show-error --fail --location --output terraform.zip \
+            "https://releases.hashicorp.com/terraform/$(terraformVersion)/terraform_$(terraformVersion)_linux_amd64.zip"
+          echo "$(terraformSha256)  terraform.zip" | sha256sum --check
+          unzip -q terraform.zip -d "$(Agent.TempDirectory)/terraform"
+          echo "##vso[task.prependpath]$(Agent.TempDirectory)/terraform"
+        displayName: Install Terraform
+        workingDirectory: $(Agent.TempDirectory)
+
+      # Is the cloud file in the standard layout?
+      - script: terraform fmt -check -recursive
+        displayName: Terraform format
+        workingDirectory: infra
+
+      # The provider, at the exact version of infra/.terraform.lock.hcl.
+      # No login to Azure: the pipeline only checks the file.
+      - script: terraform init -input=false
+        displayName: Terraform install from the lockfile
+        workingDirectory: infra
+
+      # Does the file make sense to the provider?
+      - script: terraform validate
+        displayName: Terraform validate
+        workingDirectory: infra
+
+      # The tests of the cloud file, against a stand-in for Azure.
+      - script: terraform test
+        displayName: Terraform tests
+        workingDirectory: infra
