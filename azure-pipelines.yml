@@ -19,8 +19,8 @@ pool:
   vmImage: ubuntu-24.04
 
 variables:
-  # The version of uv that wrote the lockfile. The same as in backend/Dockerfile.
-  uvVersion: 0.12.6
+  # The version of uv. The same as in backend/Dockerfile.
+  uvVersion: 0.13.8
 
 jobs:
   - job: checks

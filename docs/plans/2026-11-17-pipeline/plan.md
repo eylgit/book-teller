@@ -141,6 +141,6 @@ A second agent reviewed the change in a fresh session. The maintainer decided on
 - **A check of the page could fail by chance** once the page grows: `curl` was still sending while `grep` had already stopped. The script now lets `curl` end first.
 - **A run that hangs** is stopped after 10 minutes, not after 60.
 - **When the app does not start,** the smoke test prints the last lines that the app wrote. And it asks for the number of the user, not the name: the number 0 is root under any name.
-- **Left for its own pull request, the next one:** the pinned version of `uv`, 0.12.6, has a security notice (GHSA-hq85-5cpj-mr62), fixed in 0.13.4.
+- **Left for its own pull request, the next one:** the pinned version of `uv`, 0.12.6, has a security notice (GHSA-hq85-5cpj-mr62), fixed in 0.13.4. Done on 2026-11-18: `uv` is 0.13.8, in the pipeline and in the Dockerfile.
 - **Left for task 3:** when the Dockerfile gets a second stage, the code that finds the images must learn the name of a stage, which is not an image.
 - **Not taken:** a test that the version of `uv` is the same in the pipeline and in the Dockerfile. No mistake has happened there yet.
