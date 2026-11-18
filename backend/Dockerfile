@@ -1,10 +1,15 @@
 # The recipe for the image: the app and everything it needs.
 
+# Each image is named by its tag and by its digest. The tag is for the reader:
+# its owner can move it to another image. The digest, after "@", is the
+# fingerprint of one exact image, and it is what Docker follows.
+# A test, tests/test_build_files.py, fails when a digest is missing.
+
 # A small Linux with Python 3.14.
-FROM python:3.14-slim
+FROM python:3.14-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
 
 # The tool uv, copied from its own image, at the version that wrote the lockfile.
-COPY --from=ghcr.io/astral-sh/uv:0.12.6 /uv /bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.12.6@sha256:88bc6eb1ccd4b82efd0e1b530caffabddf50dc2bf612e66c14ea25b8ee8a4d3d /uv /bin/uv
 
 WORKDIR /app
 
