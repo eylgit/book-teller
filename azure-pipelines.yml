@@ -26,13 +26,21 @@ variables:
   # from HashiCorp's file of checksums for this version.
   terraformVersion: 1.17.2
   terraformSha256: e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b
+  # The pipeline's login to Azure: a service connection in Azure DevOps, with
+  # workload identity federation (no stored secret), Contributor on the
+  # resource group below only.
+  azureLogin: azure-book-teller
+  # Where the app runs. The names come from infra/main.tf.
+  resourceGroup: rg-book-teller
+  appName: ca-book-teller
 
 jobs:
   - job: checks
     displayName: Tests and checks
-    # A run takes about one minute. A run that hangs is stopped after ten,
-    # not after the 60 minutes that Azure Pipelines allows by itself.
-    timeoutInMinutes: 10
+    # A run on a pull request takes a few minutes; a deploy adds a few more,
+    # with up to three of waiting for the app. A run that hangs is stopped
+    # after 15, not after the 60 minutes that Azure Pipelines allows by itself.
+    timeoutInMinutes: 15
     steps:
       - script: pipx install uv==$(uvVersion)
         displayName: Install uv
@@ -94,3 +102,75 @@ jobs:
       - script: terraform test
         displayName: Terraform tests
         workingDirectory: infra
+
+      # ---- From here on: only on main, after a merge. ----
+      # A run on a pull request skips these steps, so a pull request never
+      # reaches the cloud. A run started by hand skips them too.
+
+      # The image that the smoke test checked goes to the registry, named by
+      # the id of the merge commit, not "latest": so each running app can be
+      # traced to one commit.
+      - task: AzureCLI@2
+        displayName: Push the image to the registry
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+        inputs:
+          azureSubscription: $(azureLogin)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            # The one registry of the resource group. Its name ends with a
+            # code made in infra/main.tf, so it is looked up, not written here.
+            registry="$(az acr list --resource-group "$(resourceGroup)" --query "[].loginServer" --output tsv)"
+            [ "$(wc -w <<< "$registry")" = "1" ] || { echo "Expected one registry, found: $registry" >&2; exit 1; }
+            image="$registry/book-teller:$(Build.SourceVersion)"
+            az acr login --name "${registry%%.*}"
+            docker tag book-teller:smoke-test "$image"
+            docker push "$image"
+            echo "##vso[task.setvariable variable=image]$image"
+
+      # The app runs the new image. Azure starts a new revision of it.
+      - task: AzureCLI@2
+        displayName: Deploy the image to the app
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+        inputs:
+          azureSubscription: $(azureLogin)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            # The commands for Container Apps may come as an extension of
+            # the Azure CLI: let it install without asking.
+            az config set extension.use_dynamic_install=yes_without_prompt
+            az containerapp update \
+              --name "$(appName)" \
+              --resource-group "$(resourceGroup)" \
+              --image "$(image)" \
+              --output none
+
+      # Ask the live app, for up to three minutes: a copy must first start
+      # from zero. The run fails if it does not answer {"status":"ok"}.
+      - task: AzureCLI@2
+        displayName: Ask the live app if it answers
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
+        inputs:
+          azureSubscription: $(azureLogin)
+          scriptType: bash
+          scriptLocation: inlineScript
+          inlineScript: |
+            set -euo pipefail
+            address="$(az containerapp show \
+              --name "$(appName)" \
+              --resource-group "$(resourceGroup)" \
+              --query properties.configuration.ingress.fqdn \
+              --output tsv)"
+            for _ in $(seq 36); do
+              health="$(curl --silent --max-time 10 "https://$address/health" || true)"
+              if [ "$health" = '{"status":"ok"}' ]; then
+                echo "ok: the live app answers $health"
+                exit 0
+              fi
+              sleep 5
+            done
+            echo "FAILED: the live app did not answer {\"status\":\"ok\"} in three minutes" >&2
+            exit 1
