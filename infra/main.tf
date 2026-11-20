@@ -26,6 +26,11 @@ terraform {
 # shell, so its id is not written in this repository.
 provider "azurerm" {
   features {}
+
+  # A subscription must switch on each family of Azure services once,
+  # before its first use. The first apply stopped here: the family of the
+  # registry was off. Terraform now switches it on before it makes anything.
+  resource_providers_to_register = ["Microsoft.ContainerRegistry"]
 }
 
 # Who is logged in, and to which subscription.
@@ -99,6 +104,16 @@ resource "azurerm_container_app_environment" "apps" {
   log_analytics_workspace_id = azurerm_log_analytics_workspace.logs.id
   # Without this line the logs are only streamed, not kept.
   logs_destination = "log-analytics"
+
+  # Azure gives every new environment this profile: pay by the second,
+  # zero copies when idle. Written here because Azure adds it anyway: without
+  # it, every plan wanted to remove it, and Azure put it back.
+  workload_profile {
+    name                  = "Consumption"
+    workload_profile_type = "Consumption"
+    minimum_count         = 0
+    maximum_count         = 0
+  }
 }
 
 # The app: Azure runs the image and gives it a public address.
@@ -108,6 +123,8 @@ resource "azurerm_container_app" "app" {
   container_app_environment_id = azurerm_container_app_environment.apps.id
   # One revision runs at a time: a new image replaces the old one.
   revision_mode = "Single"
+  # The profile of the environment above, which Azure picks anyway.
+  workload_profile_name = "Consumption"
 
   identity {
     type         = "UserAssigned"
