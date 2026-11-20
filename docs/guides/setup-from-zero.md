@@ -25,7 +25,7 @@ Most of the project is in files. A few settings exist only in the web pages of G
   - the run of the pipeline must have passed, on a branch that holds the newest `main`;
   - no push by force, and the branch cannot be deleted;
   - nobody may pass the rules, also not the owner;
-  - merges by merge commit only.
+  - a pull request is merged with a merge commit, never a squash: the merge rule in `CLAUDE.md`.
 
 ## 2. The cloud: in files
 

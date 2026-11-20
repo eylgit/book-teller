@@ -139,9 +139,10 @@ jobs:
           scriptLocation: inlineScript
           inlineScript: |
             set -euo pipefail
-            # The commands for Container Apps may come as an extension of
-            # the Azure CLI: let it install without asking.
-            az config set extension.use_dynamic_install=yes_without_prompt
+            # The commands for Container Apps are part of the Azure CLI of
+            # the build machine: no extension is installed. If a later CLI
+            # lacks them, this step fails, rather than install a version
+            # that nobody chose.
             az containerapp update \
               --name "$(appName)" \
               --resource-group "$(resourceGroup)" \
