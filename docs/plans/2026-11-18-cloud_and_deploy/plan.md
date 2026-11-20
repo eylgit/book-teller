@@ -1,6 +1,6 @@
 # Task 3: the cloud as a Terraform file, and deploy on merge
 
-**State:** planned on 2026-11-18. The maintainer said yes to the plan on the same day, with the recommended answer to each of the five questions below. The cloud is made, and the deploy steps are in the pipeline; the review and the first deploy come next. What was seen is at the end.
+**State:** planned on 2026-11-18. The maintainer said yes to the plan on the same day, with the recommended answer to each of the five questions below. Done on 2026-11-20: the cloud is made, and the merge of pull request 3 was the first deploy. What was seen, and what the review changed, are at the end.
 
 It is the third task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -128,10 +128,10 @@ Seen once by the maintainer:
 - **Two kinds of processor.** The maintainer's machine is ARM; Azure runs the image on x86. Only the build machine, which is x86, pushes images, so the right form reaches Azure.
 - **Provider version 5.** The agent knows version 4 of the provider best. `terraform validate` reads the real provider, so a wrong name fails in step 7, before anything is made.
 - **A Microsoft service is switched off for the subscription.** Azure must switch each family of services on before its first use. The provider asks for the common ones by itself; one may still be missing.
-- **A pull request must never reach the cloud.** Steps 9 to 11 run only for `main`, and only after a merge. But a run on a pull request uses the pipeline file of its own branch, and a branch can delete those conditions. So the real wall is kept in Azure DevOps, on the service connection: a check "Branch control" lets only runs from `main` use it. Also, pull requests come only from collaborators, and Azure Pipelines builds none from a fork, as task 2 set.
+- **A pull request must never reach the cloud.** Steps 9 to 11 run only for `main`, and only after a merge. But a run on a pull request uses the pipeline file of its own branch, and a branch can delete those conditions. So those conditions are the only wall. Accepted by the maintainer: only collaborators can push a branch, and Azure Pipelines builds no pull request from a fork, as task 2 set. A check "Branch control" on the service connection was tried and removed: see "What was seen".
 - **If Terraform ever makes the app again,** the stand-in comes back until the next merge. `ignore_changes` keeps Terraform away from the image of the app that exists; but a change to a setting that cannot change on a running app, such as its name or its environment, makes Terraform delete the app and make a new one from this file. A plan says so with `-/+` and "must be replaced".
 - **Images pile up in the registry,** one for each merge. Basic holds 10 GB (an older figure, not read again), and its plan has no rule that deletes old images. A later task adds a clean-up.
-- **The Azure CLI may install its commands for Container Apps as an extension,** at the newest version: the only tool of the pipeline that is not pinned. The log of the first deploy shows whether it happens; then it gets pinned.
+- **The Azure CLI may lack its commands for Container Apps one day.** Today they are built in. The deploy step then fails, rather than install a version that nobody chose.
 
 ## How it is undone
 
@@ -145,7 +145,15 @@ Seen once by the maintainer:
 - **The stand-in on port 80 did not stop the apply.** The app was made with the quickstart image, while it sends requests to port 8000.
 - **A plan after the apply was not "No changes".** Azure gives every new Container Apps environment a workload profile named "Consumption", and puts the app on it. The file did not name it, so every plan wanted to remove it, and Azure put it back. The file now names it, and a plan says "No changes".
 - **The state file is on the maintainer's machine,** and `git status` does not show it.
+- **The plan after the review fixes said "No changes"** again: the mode of the registry was already the legacy one, and switching on families of services changes no thing.
 - **The first run that names the service connection** stopped once, for the maintainer to permit the pipeline to use it. Then the run on the pull request passed, with the deploy steps skipped.
+- **The first deploy:** the merge of pull request 3 ran all 15 steps in 2 minutes 4 seconds. The live check passed in 40 seconds: the version taking the visits ran the new image, pulled from the private registry with the app's identity, and answered `{"status":"ok"}`. The Book Teller page is live.
+- **The image in the registry** is named by the merge commit, and its platform is `linux/amd64`: built on the build machine, not on the maintainer's ARM machine.
+- **A `docker pull` of that image without a login** was refused: "authentication required".
+- **After the deploy, `terraform plan` said "No changes":** Terraform leaves the image to the pipeline.
+- **The Azure CLI of the build machine (2.93.0) has the commands for Container Apps built in;** no extension was installed. The line that allowed an unpinned install is removed.
+- **The branch control blocked every pull request.** The first run of pull request 4 stopped before any step: "1 checks failed". Azure DevOps runs the checks of a login before the job starts, for every login that the job names, also in steps that would be skipped; and here one job holds the tests and the deploy. The options were two stages with the tested image handed over as a file, a second build of the image in the deploy stage, or no check. The maintainer chose no check.
+- **Not as expected:** the portal lists only the revision of our image, `--0000001`, and no inactive revision of the stand-in. Not verified why.
 
 ## What the review changed
 
@@ -153,7 +161,7 @@ A second agent reviewed the change in a fresh session, with 12 findings. The mai
 
 - **The live check could pass while the new image was not running.** If a new image fails to start, Azure keeps the old version taking the visits, and the old one also answers "ok". The check now also requires that the version taking the visits runs the new image.
 - **The wait was up to nine minutes, not three:** 36 tries of up to 15 seconds each. It is now a clock of three minutes.
-- **The conditions in the pipeline file were the only wall** between a pull request and the cloud, and a branch can change them. A check "Branch control" on the service connection now lets only runs from `main` use it.
+- **The conditions in the pipeline file were the only wall** between a pull request and the cloud, and a branch can change them. A check "Branch control" on the service connection was added, and removed after it blocked every pull request: see "What was seen".
 - **The mode of the registry was left to Azure's default.** It is now written: `LegacyRegistryPermissions`, the mode in which `AcrPull` works.
 - **Only one family of Azure services was switched on by the file.** All four that it uses are now.
 - **How to set up the project from zero** was spread over the plans. It is now one guide: [docs/guides/setup-from-zero.md](../../guides/setup-from-zero.md).
