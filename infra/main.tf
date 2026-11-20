@@ -29,8 +29,14 @@ provider "azurerm" {
 
   # A subscription must switch on each family of Azure services once,
   # before its first use. The first apply stopped here: the family of the
-  # registry was off. Terraform now switches it on before it makes anything.
-  resource_providers_to_register = ["Microsoft.ContainerRegistry"]
+  # registry was off. Terraform now switches on every family that this file
+  # uses, before it makes anything, so a fresh subscription works too.
+  resource_providers_to_register = [
+    "Microsoft.App",
+    "Microsoft.ContainerRegistry",
+    "Microsoft.ManagedIdentity",
+    "Microsoft.OperationalInsights",
+  ]
 }
 
 # Who is logged in, and to which subscription.
@@ -77,6 +83,12 @@ resource "azurerm_container_registry" "images" {
 
   # Nobody pulls an image without a login.
   anonymous_pull_enabled = false
+
+  # Rights are given by roles on the whole registry, so the role AcrPull
+  # below works. In the newer mode, rights are given per repository, and
+  # AcrPull alone gives nothing. Today's default, written down so that
+  # Azure cannot change it for us.
+  role_assignment_mode = "LegacyRegistryPermissions"
 }
 
 # The app's own login to Azure, with no password. It is made before the

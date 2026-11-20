@@ -132,6 +132,8 @@ run "the_cloud_as_written" {
   }
 
   # 7. Every thing is in UK South, the region of the model.
+  # The container app is not in the list: it has no region setting of its
+  # own, and Azure puts it where its environment is.
   assert {
     condition = alltrue([
       azurerm_resource_group.product.location == "uksouth",

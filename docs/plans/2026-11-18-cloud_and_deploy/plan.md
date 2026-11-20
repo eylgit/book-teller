@@ -1,6 +1,6 @@
 # Task 3: the cloud as a Terraform file, and deploy on merge
 
-**State:** planned on 2026-11-18. The maintainer said yes to the plan on the same day, with the recommended answer to each of the five questions below.
+**State:** planned on 2026-11-18. The maintainer said yes to the plan on the same day, with the recommended answer to each of the five questions below. The cloud is made, and the deploy steps are in the pipeline; the review and the first deploy come next. What was seen is at the end.
 
 It is the third task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -21,7 +21,7 @@ The empty page of [task 1](../2026-11-16-app_skeleton/plan.md) is live on Azure.
 | `infra/main.tf` | The cloud, in one file. The list is below |
 | `infra/.terraform.lock.hcl` | The lockfile of Terraform: the exact version of the Azure provider (the plug-in that talks to Azure), with its checksums. Like `backend/uv.lock` |
 | `infra/tests/cloud.tftest.hcl` | Tests of the file, run by `terraform test`. They use a mock provider (a stand-in for Azure that gives made-up answers), so they need no login and make nothing |
-| `azure-pipelines.yml` | Three new steps on every pull request: the format check, the validation and the tests of the Terraform file. Three new steps on `main` after a merge only: push the image, deploy it, ask the live app if it answers |
+| `azure-pipelines.yml` | Five new steps on every pull request: install Terraform, the format check, install the provider from the lockfile, the validation and the tests of the Terraform file. Three new steps on `main` after a merge only: push the image, deploy it, ask the live app if it answers |
 | `README.md` | How the cloud is made, and how a merge deploys |
 | A service connection in Azure DevOps | The pipeline's login to Azure. Made by hand, once |
 
@@ -92,7 +92,7 @@ In `infra/tests/cloud.tftest.hcl`, run by `terraform test`, with the mock provid
 2. The app takes requests from the internet, on port 8000, over HTTPS only.
 3. The registry has no admin user.
 4. The app runs as the user-assigned identity, and pulls from the registry as that identity.
-5. A role assignment gives that identity the role `AcrPull`, on the registry, and the file holds no other role assignment.
+5. A role assignment gives that identity the role `AcrPull`, on the registry. Not tested: that the file holds no other role assignment. `terraform test` finds a thing by its name and cannot count the things of one kind.
 6. The app holds no secret.
 7. Every thing is in UK South.
 8. The log workspace has a daily cap.
@@ -128,8 +128,34 @@ Seen once by the maintainer:
 - **Two kinds of processor.** The maintainer's machine is ARM; Azure runs the image on x86. Only the build machine, which is x86, pushes images, so the right form reaches Azure.
 - **Provider version 5.** The agent knows version 4 of the provider best. `terraform validate` reads the real provider, so a wrong name fails in step 7, before anything is made.
 - **A Microsoft service is switched off for the subscription.** Azure must switch each family of services on before its first use. The provider asks for the common ones by itself; one may still be missing.
-- **A pull request must never reach the cloud.** Steps 9 to 11 run only for `main`, and only after a merge. Pull requests come only from collaborators, and Azure Pipelines builds none from a fork, as task 2 set.
+- **A pull request must never reach the cloud.** Steps 9 to 11 run only for `main`, and only after a merge. But a run on a pull request uses the pipeline file of its own branch, and a branch can delete those conditions. So the real wall is kept in Azure DevOps, on the service connection: a check "Branch control" lets only runs from `main` use it. Also, pull requests come only from collaborators, and Azure Pipelines builds none from a fork, as task 2 set.
+- **If Terraform ever makes the app again,** the stand-in comes back until the next merge. `ignore_changes` keeps Terraform away from the image of the app that exists; but a change to a setting that cannot change on a running app, such as its name or its environment, makes Terraform delete the app and make a new one from this file. A plan says so with `-/+` and "must be replaced".
+- **Images pile up in the registry,** one for each merge. Basic holds 10 GB (an older figure, not read again), and its plan has no rule that deletes old images. A later task adds a clean-up.
+- **The Azure CLI may install its commands for Container Apps as an extension,** at the newest version: the only tool of the pipeline that is not pinned. The log of the first deploy shows whether it happens; then it gets pinned.
 
 ## How it is undone
 
 `terraform destroy`, or delete the resource group: every thing of this task is in it. Then delete the service connection in Azure DevOps, and take the new files and lines back. The cost stops with the registry.
+
+## What was seen
+
+- **The first run of the pull request failed,** with "Reference to undeclared resource": the tests of the file were pushed before the file. The install of Terraform, with its checksum, and `terraform init` from the lockfile worked on the build machine.
+- **The first `terraform test` against the new file failed,** for a reason in the test, not in the file: the mock provider made up ids such as `hoq2izpc`, and the provider refuses an id that is not in the shape of an Azure address. The mock now gives ids in the real shape; no assertion changed. Then the tests passed, and they said no once, with the lowest number of copies set to 1.
+- **The first `terraform apply` stopped after 4 of the 7 things.** The subscription had not switched on the family of services of the registry, `Microsoft.ContainerRegistry`. Terraform did not undo the 4; the state file recorded them. The provider block now switches the family on, and the second apply made the other 3.
+- **The stand-in on port 80 did not stop the apply.** The app was made with the quickstart image, while it sends requests to port 8000.
+- **A plan after the apply was not "No changes".** Azure gives every new Container Apps environment a workload profile named "Consumption", and puts the app on it. The file did not name it, so every plan wanted to remove it, and Azure put it back. The file now names it, and a plan says "No changes".
+- **The state file is on the maintainer's machine,** and `git status` does not show it.
+- **The first run that names the service connection** stopped once, for the maintainer to permit the pipeline to use it. Then the run on the pull request passed, with the deploy steps skipped.
+
+## What the review changed
+
+A second agent reviewed the change in a fresh session, with 12 findings. The maintainer decided on each.
+
+- **The live check could pass while the new image was not running.** If a new image fails to start, Azure keeps the old version taking the visits, and the old one also answers "ok". The check now also requires that the version taking the visits runs the new image.
+- **The wait was up to nine minutes, not three:** 36 tries of up to 15 seconds each. It is now a clock of three minutes.
+- **The conditions in the pipeline file were the only wall** between a pull request and the cloud, and a branch can change them. A check "Branch control" on the service connection now lets only runs from `main` use it.
+- **The mode of the registry was left to Azure's default.** It is now written: `LegacyRegistryPermissions`, the mode in which `AcrPull` works.
+- **Only one family of Azure services was switched on by the file.** All four that it uses are now.
+- **How to set up the project from zero** was spread over the plans. It is now one guide: [docs/guides/setup-from-zero.md](../../guides/setup-from-zero.md).
+- **Small fixes:** a simpler lookup of the registry; the text of test case 5 now says what is not tested; a comment says why test 7 leaves out the app; "What could go wrong" names a new app made by Terraform, the images that pile up, and the one tool that is not pinned.
+- **Not taken:** a test that counts the role assignments in the file, since no such mistake has happened; one step in place of the deploy and the live check, since two names read better in the log.

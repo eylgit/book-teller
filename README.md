@@ -4,7 +4,7 @@ Book Teller turns a book into a podcast series: the book told well by one voice,
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
-**Status:** the skeleton and its pipeline. The app shows one page and answers one health address; it tells no book yet. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
+**Status:** the skeleton, its pipeline, and its cloud. The app shows one page and answers one health address; it tells no book yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
 
 ## Run it
 
@@ -23,8 +23,10 @@ A change to the page, `backend/src/book_teller/static/index.html`, shows after a
 | Folder | What it holds |
 |---|---|
 | `backend/` | The Python project: the web app, its tests, its lockfile and its Dockerfile |
+| `infra/` | The cloud, as one Terraform file, with its tests and its lockfile |
 | `scripts/` | Scripts for the whole repository. Today one: the smoke test of the image |
 | `docs/plans/` | One plan for each piece of work |
+| `docs/guides/` | What lasts after a piece of work: e.g. how to set up the project from zero |
 | `experiments/` | One-time experiments, kept as they were run. Each folder has the name of its plan folder in `docs/plans/` |
 
 ## Run the checks
@@ -53,6 +55,22 @@ bash scripts/smoke_test.sh
 Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it: the tests, the three checks and the smoke test, on a fresh machine in Azure Pipelines. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
 
 The pipeline runs in a private project of Azure DevOps, because Microsoft no longer offers public ones. So a visitor sees on each pull request whether the run passed, but cannot open its full log.
+
+**A merge deploys.** After a merge, the same run goes on: it pushes the image that the smoke test checked to the registry, named by the id of the merge commit; it tells the app to run that image; and it asks the live app `/health` until it answers. A run on a pull request skips these steps. The pipeline logs in to Azure with no stored secret (workload identity federation), and its rights reach only the resource group of the app.
+
+## The cloud
+
+The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password.
+
+The maintainer runs Terraform from their own machine, with their own Azure login; the pipeline only checks the file. The state file, Terraform's record of what it made, stays on that machine and is never committed: it can hold secrets. Terraform leaves the image of the app to the pipeline.
+
+The tests of the file use a stand-in for Azure, so they need no login. Run them in the folder `infra`, after `terraform init`:
+
+```
+terraform test
+```
+
+How to make the cloud, and the settings that exist only in web pages: [docs/guides/setup-from-zero.md](docs/guides/setup-from-zero.md).
 
 ## How it is built
 

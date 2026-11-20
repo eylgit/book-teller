@@ -121,10 +121,10 @@ jobs:
             set -euo pipefail
             # The one registry of the resource group. Its name ends with a
             # code made in infra/main.tf, so it is looked up, not written here.
-            registry="$(az acr list --resource-group "$(resourceGroup)" --query "[].loginServer" --output tsv)"
+            registry="$(az acr list --resource-group "$(resourceGroup)" --query "[].name" --output tsv)"
             [ "$(wc -w <<< "$registry")" = "1" ] || { echo "Expected one registry, found: $registry" >&2; exit 1; }
-            image="$registry/book-teller:$(Build.SourceVersion)"
-            az acr login --name "${registry%%.*}"
+            image="$registry.azurecr.io/book-teller:$(Build.SourceVersion)"
+            az acr login --name "$registry"
             docker tag book-teller:smoke-test "$image"
             docker push "$image"
             echo "##vso[task.setvariable variable=image]$image"
@@ -149,7 +149,10 @@ jobs:
               --output none
 
       # Ask the live app, for up to three minutes: a copy must first start
-      # from zero. The run fails if it does not answer {"status":"ok"}.
+      # from zero. Two things must be true at once: the version that takes
+      # the visits runs the new image, and it answers {"status":"ok"}. The
+      # answer alone is not enough: if a new image fails to start, Azure keeps
+      # the old version taking the visits, and the old one answers "ok" too.
       - task: AzureCLI@2
         displayName: Ask the live app if it answers
         condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
@@ -164,13 +167,23 @@ jobs:
               --resource-group "$(resourceGroup)" \
               --query properties.configuration.ingress.fqdn \
               --output tsv)"
-            for _ in $(seq 36); do
+            # A clock, not a count of tries: a try that hangs still ends
+            # the wait at three minutes.
+            deadline=$((SECONDS + 180))
+            while [ "$SECONDS" -lt "$deadline" ]; do
+              # The image of the revision that takes all the visits.
+              serving="$(az containerapp revision list \
+                --name "$(appName)" \
+                --resource-group "$(resourceGroup)" \
+                --query "[?properties.trafficWeight==\`100\`].properties.template.containers[0].image" \
+                --output tsv)"
               health="$(curl --silent --max-time 10 "https://$address/health" || true)"
-              if [ "$health" = '{"status":"ok"}' ]; then
-                echo "ok: the live app answers $health"
+              if [ "$serving" = "$(image)" ] && [ "$health" = '{"status":"ok"}' ]; then
+                echo "ok: the live app runs the new image and answers $health"
                 exit 0
               fi
               sleep 5
             done
-            echo "FAILED: the live app did not answer {\"status\":\"ok\"} in three minutes" >&2
+            echo "FAILED: in three minutes, the live app did not run the new image and answer {\"status\":\"ok\"}" >&2
+            echo "The image that takes the visits: ${serving:-none}" >&2
             exit 1
