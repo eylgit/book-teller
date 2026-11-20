@@ -7,7 +7,48 @@
 # no login, make nothing, and cost nothing. They check what the file asks
 # for, not what Azure does with it.
 
-mock_provider "azurerm" {}
+mock_provider "azurerm" {
+  # The provider checks that an id has the shape of an Azure address. A
+  # made-up id like "hoq2izpc" fails that check, so the stand-in is given
+  # ids in the real shape, under a subscription id of zeros.
+  mock_resource "azurerm_resource_group" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller"
+    }
+  }
+  mock_resource "azurerm_log_analytics_workspace" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.OperationalInsights/workspaces/log-book-teller"
+    }
+  }
+  mock_resource "azurerm_container_registry" {
+    defaults = {
+      id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.ContainerRegistry/registries/crbooktellertest"
+      login_server = "crbooktellertest.azurecr.io"
+    }
+  }
+  mock_resource "azurerm_user_assigned_identity" {
+    defaults = {
+      id           = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.ManagedIdentity/userAssignedIdentities/id-book-teller-app"
+      principal_id = "11111111-1111-1111-1111-111111111111"
+    }
+  }
+  mock_resource "azurerm_container_app_environment" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.App/managedEnvironments/cae-book-teller"
+    }
+  }
+  mock_resource "azurerm_container_app" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.App/containerApps/ca-book-teller"
+    }
+  }
+  mock_data "azurerm_client_config" {
+    defaults = {
+      subscription_id = "00000000-0000-0000-0000-000000000000"
+    }
+  }
+}
 
 run "the_cloud_as_written" {
   # "apply" against the mock: the made-up ids exist, so the tests can check
