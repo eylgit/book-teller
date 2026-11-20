@@ -54,7 +54,7 @@ terraform apply
   - Scope: the subscription, and the resource group **`rg-book-teller`** only. Its role there is Contributor.
   - Name: **`azure-book-teller`**, the name that `azure-pipelines.yml` uses.
   - "Grant access permission to all pipelines": off. The first run that names it waits until it is permitted.
-- **Branch control on the service connection:** on the service connection, "Approvals and checks" → add "Branch control" → allowed branches `refs/heads/main`. A run on a pull request uses the pipeline file of its own branch, and a branch can delete the conditions in that file. This check is kept in Azure DevOps, where no branch can change it.
+- **No check on the service connection.** A check "Branch control" was tried and removed: Azure DevOps runs it before a job starts, for every login that the job names, so it stopped every run on a pull request, tests included. So the conditions in `azure-pipelines.yml` are the only wall between a pull request and the cloud. A branch can change them; only collaborators can push a branch.
 
 ## 4. The first deploy
 
