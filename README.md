@@ -4,7 +4,7 @@ Book Teller turns a book into a podcast series: the book told well by one voice,
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
-**Status:** the skeleton, its pipeline, and its cloud. The app shows one page and answers one health address; it tells no book yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
+**Status:** the skeleton, its pipeline, its cloud, and the call to the model. The app shows one page and answers one health address; it tells no book yet. The code that calls the model exists and is tested, but no page uses it yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
 
 ## Run it
 
@@ -49,6 +49,22 @@ The smoke test needs Docker and curl, and the ports 8000 and 8001 free. It build
 ```
 bash scripts/smoke_test.sh
 ```
+
+## The model call
+
+Every call to the model goes through one file, [backend/src/book_teller/model_call.py](backend/src/book_teller/model_call.py). It uses LangChain's model class and writes out each choice that the class would otherwise make by itself: which of OpenAI's two APIs, the strict shape of the answer, how much the model thinks, the timeout, and the number of tries. Whatever goes wrong, the caller gets one error with one of six reasons. The tests put a fake in the place of the network, so they read the real request and cost nothing. Why each choice was made, and what was measured: [the plan of that task](docs/plans/2026-11-24-model_call/plan.md).
+
+**No key.** The code logs in to Azure as whoever runs it: on a developer's machine the login of the Azure CLI, in the cloud the identity of the app. That login needs the role "Cognitive Services OpenAI User" on the model resource; being its owner is not enough.
+
+**The settings** come from environment variables. Their names are in [backend/.env.example](backend/.env.example). Copy that file to `backend/.env`, which git never sees, and fill in the address of your model service and the name of your deployment.
+
+**To measure what a thinking setting costs,** run this inside the folder `backend`. It makes one real call for each setting that is named, so it costs money: about one US cent a call.
+
+```
+PYTHONPATH=src uv run --env-file .env python -m book_teller.measure --thinking low medium
+```
+
+With `--show` it also prints each request and each answer, made short.
 
 ## How a change gets in
 

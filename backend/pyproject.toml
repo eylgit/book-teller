@@ -5,7 +5,11 @@ description = "Turns a book into a podcast series, and checks every script again
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
+    "azure-identity>=1.27.0",
     "fastapi>=0.163.1",
+    "httpx2>=2.16.2",
+    "langchain-openai>=1.8.5",
+    "pydantic>=2.14.3",
     "uvicorn>=0.54.0",
 ]
 
@@ -15,7 +19,16 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 # A warning fails the test run. A warning that a library will stop working
 # with another one was once left unseen.
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # One warning is let through, by its words, its kind and its module.
+    # LangChain brings the library langsmith. langsmith 0.16.2 calls a function
+    # that Python 3.14 names as outdated, each time it is loaded. No code of
+    # ours can avoid it. The fix waits at the library:
+    # https://github.com/langchain-ai/langsmith-sdk/pull/3347
+    # Take this line out when a release of langsmith holds the fix.
+    "ignore:'asyncio.iscoroutinefunction' is deprecated:DeprecationWarning:langsmith._internal._beta_decorator",
+]
 
 # The linter and the formatter.
 [tool.ruff]
@@ -33,7 +46,6 @@ mypy_path = "src"
 
 [dependency-groups]
 dev = [
-    "httpx2>=2.16.2",
     "mypy>=2.4.1",
     "pytest>=9.2.0",
     "ruff>=0.17.5",

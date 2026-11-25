@@ -1,6 +1,8 @@
 # Secrets: never in the repository
 .env
 .env.*
+# The example is not a secret: it holds the names of the settings, no values.
+!.env.example
 *.pem
 *.key
 
