@@ -3,8 +3,17 @@
 import json
 import re
 
-from book_teller.check_step import INSTRUCTIONS, Flag, Flags, Kind, numbered_texts
-from book_teller.model_call import ask_model, make_model
+import pytest
+
+from book_teller.check_step import (
+    INSTRUCTIONS,
+    Flag,
+    Flags,
+    Kind,
+    numbered_texts,
+    paragraphs,
+)
+from book_teller.model_call import ModelCallError, Reason, ask_model, make_model
 from book_teller.settings import ModelSettings
 from book_teller.write_step import Script
 from fake_model_service import FakeModelService, text_answer
@@ -76,6 +85,62 @@ def test_a_line_that_holds_only_spaces_ends_a_paragraph_too() -> None:
     text = numbered_texts("One.\n \t\nTwo.", [])
 
     assert "[P1] One.\n\n[P2] Two." in text
+
+
+def test_the_split_gives_the_paragraphs_that_the_numbering_shows() -> None:
+    # The guard searches a quote in these paragraphs, and the checker reads
+    # the numbered text. "P2" must be the same paragraph for both.
+    chapter = "First\nparagraph.\n\n\nSecond paragraph.\n \t\nThird."
+
+    split = paragraphs(chapter)
+
+    assert split == ["First paragraph.", "Second paragraph.", "Third."]
+    numbered = numbered_texts(chapter, [])
+    for number, paragraph in enumerate(split, 1):
+        assert f"[P{number}] {paragraph}" in numbered
+
+
+@pytest.mark.parametrize(
+    "one_flag",
+    [
+        # A kind that is not one of the six names.
+        {
+            "sentence": 1,
+            "kind": "wrong_colour",
+            "paragraph": 1,
+            "quote": "Habit is a second nature.",
+            "reason": "The script says third.",
+        },
+        # No quote.
+        {
+            "sentence": 1,
+            "kind": "wrong_fact",
+            "paragraph": 1,
+            "reason": "The script says third.",
+        },
+        # A sentence number that is not a whole number.
+        {
+            "sentence": "the first",
+            "kind": "wrong_fact",
+            "paragraph": 1,
+            "quote": "Habit is a second nature.",
+            "reason": "The script says third.",
+        },
+    ],
+)
+def test_an_answer_that_is_not_in_the_shape_of_a_flag_is_a_wrong_shape(
+    one_flag: dict[str, object],
+) -> None:
+    # The shape check: Pydantic compares the answer with the class Flag,
+    # inside ask_model. The real service forces the shape, so such an answer
+    # is rare. The check must not lean on that.
+    service = FakeModelService(text_answer(json.dumps({"flags": [one_flag]})))
+    model = make_model(SETTINGS, fake_token, http_client=service.client())
+
+    with pytest.raises(ModelCallError) as caught:
+        ask_model(model, INSTRUCTIONS, "THE TEXT", Flags)
+
+    assert caught.value.reason == Reason.WRONG_SHAPE
 
 
 def test_the_instructions_say_how_the_texts_are_numbered() -> None:

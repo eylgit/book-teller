@@ -22,6 +22,9 @@ from book_teller.write_step import Script
 
 SCRIPT = Script(sentences=["James starts with the word habit.", "Habits can be good."])
 
+# The one flag of the fake checker. In the chapter of the tests its quote is
+# in paragraph 2, and the flag names paragraph 1: a checker can be wrong
+# about the number and right about the quote.
 FLAGS = Flags(
     flags=[
         Flag(
@@ -52,17 +55,19 @@ class FakeAsk:
 
     fail_once: for a shape, the error of its first call; the next call answers.
     fail_always: for a shape, the error of every call.
+    flags: the answer of the checker, in place of FLAGS.
     """
 
     def __init__(
         self,
         fail_once: dict[type[BaseModel], ModelCallError] | None = None,
         fail_always: dict[type[BaseModel], ModelCallError] | None = None,
+        flags: Flags = FLAGS,
     ) -> None:
         self.asked: list[Asked] = []
         self._fail_once = dict(fail_once or {})
         self._fail_always = dict(fail_always or {})
-        self._answers: dict[type[BaseModel], BaseModel] = {Script: SCRIPT, Flags: FLAGS}
+        self._answers: dict[type[BaseModel], BaseModel] = {Script: SCRIPT, Flags: flags}
 
     def __call__[Shape: BaseModel](
         self, instructions: str, text: str, shape: type[Shape]

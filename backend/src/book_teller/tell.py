@@ -1,4 +1,4 @@
-r"""Tell one chapter: run the two steps, write and check, with the real model.
+r"""Tell one chapter: run the steps of an episode, with the real model.
 
 Started by hand. It makes REAL calls, which cost money: two for one run, and
 more when a step is tried again. The cost that it prints leaves out a try
@@ -8,7 +8,8 @@ that failed. From the folder "backend":
         python -m book_teller.tell CHAPTER_FILE
 
 It prints the script, the faults that the checker flagged, and what each
-step cost. The login is the one of the Azure CLI; no key is used.
+step cost. The faults that the guard could not prove are printed apart, each
+with its problem. The login is the one of the Azure CLI; no key is used.
 
 With "--picture" it asks no model: it prints the graph as a diagram.
 """
@@ -22,7 +23,7 @@ from typing import TextIO
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
-from book_teller.check_step import numbered_script
+from book_teller.check_step import Flag, numbered_script
 from book_teller.episode import Ask, picture, run_episode
 from book_teller.model_call import (
     ModelAnswer,
@@ -45,11 +46,28 @@ def tell(chapter: str, ask: Ask, out: TextIO) -> int:
     out.write("THE SCRIPT\n\n")
     out.write(numbered_script(state["script"]) + "\n")
 
-    out.write(f"\nTHE FLAGS: {len(state['flags'])}\n\n")
-    for flag in state["flags"]:
-        where = f"S{flag.sentence}" if flag.sentence else "no sentence"
-        out.write(f"- {where}, {flag.kind.value}: {flag.reason}\n")
-        out.write(f'  the book, P{flag.paragraph}: "{flag.quote}"\n')
+    # The guard has checked every flag. A flag is proven when its sentence
+    # exists and its quote is in the chapter.
+    proven = [checked for checked in state["checked"] if checked.proven]
+    not_proven = [checked for checked in state["checked"] if not checked.proven]
+    out.write(
+        f"\nTHE FLAGS: {len(state['checked'])}, "
+        f"of them not proven: {len(not_proven)}\n\n"
+    )
+    for checked in proven:
+        out.write(_first_line(checked.flag))
+        # The paragraph where the guard found the quote.
+        out.write(f'  the book, P{checked.found_in}: "{checked.flag.quote}"\n')
+    if not_proven:
+        out.write("\nNOT PROVEN\n\n")
+    for checked in not_proven:
+        flag = checked.flag
+        out.write(_first_line(flag))
+        # The quote and the paragraph as the checker gave them. A flag that
+        # is not proven is printed so, whatever its problem is.
+        out.write(f'  the checker\'s quote, P{flag.paragraph}: "{flag.quote}"\n')
+        problems = ", ".join(problem.value for problem in checked.problems)
+        out.write(f"  the problem: {problems}\n")
 
     out.write("\nTHE COST\n\n")
     out.write(
@@ -62,6 +80,11 @@ def tell(chapter: str, ask: Ask, out: TextIO) -> int:
             f"{cost.thinking_tokens:>18}{cost.seconds:>9.1f}\n"
         )
     return 0
+
+
+def _first_line(flag: Flag) -> str:
+    where = f"S{flag.sentence}" if flag.sentence else "no sentence"
+    return f"- {where}, {flag.kind.value}: {flag.reason}\n"
 
 
 def ask_with(model: ChatOpenAI) -> Ask:
