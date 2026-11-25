@@ -1,7 +1,8 @@
 r"""Tell one chapter: run the two steps, write and check, with the real model.
 
 Started by hand. It makes REAL calls, which cost money: two for one run, and
-more when a step is tried again. From the folder "backend":
+more when a step is tried again. The cost that it prints leaves out a try
+that failed. From the folder "backend":
 
     PYTHONPATH=src uv run --env-file .env \
         python -m book_teller.tell CHAPTER_FILE
@@ -18,6 +19,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
 
+from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from book_teller.check_step import numbered_script
@@ -62,6 +64,17 @@ def tell(chapter: str, ask: Ask, out: TextIO) -> int:
     return 0
 
 
+def ask_with(model: ChatOpenAI) -> Ask:
+    """The real "ask the model": ask_model, with the model already inside."""
+
+    def ask[Shape: BaseModel](
+        instructions: str, text: str, shape: type[Shape]
+    ) -> ModelAnswer[Shape]:
+        return ask_model(model, instructions, text, shape)
+
+    return ask
+
+
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=(__doc__ or "").splitlines()[0])
     parser.add_argument(
@@ -81,20 +94,18 @@ def main(arguments: Sequence[str] | None = None) -> int:
         parser.error("name the file that holds the chapter")
 
     try:
+        chapter = args.chapter.read_text(encoding="utf-8")
+    except OSError as error:
+        sys.stdout.write(f"ERROR: the chapter cannot be read: {error}\n")
+        return 1
+    try:
         settings = read_model_settings()
     except SettingsError as error:
         sys.stdout.write(f"ERROR: {error}\n")
         return 1
 
     model = make_model(settings, azure_login())
-
-    def ask[Shape: BaseModel](
-        instructions: str, text: str, shape: type[Shape]
-    ) -> ModelAnswer[Shape]:
-        """ask_model of model_call.py, with the model already inside."""
-        return ask_model(model, instructions, text, shape)
-
-    return tell(args.chapter.read_text(encoding="utf-8"), ask, sys.stdout)
+    return tell(chapter, ask_with(model), sys.stdout)
 
 
 if __name__ == "__main__":

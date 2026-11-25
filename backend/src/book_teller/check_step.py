@@ -5,6 +5,7 @@ chapter and the script, both numbered, and lists every fault that it finds
 in the script. The graph that runs the step is in episode.py.
 """
 
+import re
 from collections.abc import Sequence
 from enum import StrEnum
 
@@ -87,10 +88,13 @@ class Flags(BaseModel):
 def numbered_texts(chapter: str, sentences: Sequence[str]) -> str:
     """The chapter and the script as one text, with every part numbered.
 
-    A blank line ends a paragraph of the chapter.
+    A blank line ends a paragraph of the chapter. A line that holds only
+    spaces counts as blank.
     """
     paragraphs = [
-        " ".join(block.split()) for block in chapter.split("\n\n") if block.strip()
+        " ".join(block.split())
+        for block in re.split(r"\n\s*\n", chapter)
+        if block.strip()
     ]
     chapter_text = "\n\n".join(
         f"[P{number}] {paragraph}" for number, paragraph in enumerate(paragraphs, 1)

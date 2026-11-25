@@ -6,6 +6,7 @@ import re
 from book_teller.check_step import INSTRUCTIONS, Flag, Flags, Kind, numbered_texts
 from book_teller.model_call import ask_model, make_model
 from book_teller.settings import ModelSettings
+from book_teller.write_step import Script
 from fake_model_service import FakeModelService, text_answer
 
 SETTINGS = ModelSettings(
@@ -23,6 +24,15 @@ def test_every_field_of_a_flag_has_a_description() -> None:
     assert set(fields) == {"sentence", "kind", "paragraph", "quote", "reason"}
     for name, field in fields.items():
         assert field.get("description"), f"the field {name} has no description"
+    # A fault of the kind "left_out" has no sentence. The model must be told
+    # which number to give then.
+    assert "0" in fields["sentence"]["description"]
+    assert Kind.LEFT_OUT.value in fields["sentence"]["description"]
+
+
+def test_the_lists_of_both_shapes_have_a_description() -> None:
+    assert Flags.model_json_schema()["properties"]["flags"].get("description")
+    assert Script.model_json_schema()["properties"]["sentences"].get("description")
 
 
 def test_the_descriptions_and_the_names_of_the_kinds_reach_the_model() -> None:
@@ -59,3 +69,15 @@ def test_the_paragraphs_and_the_sentences_are_numbered_from_one() -> None:
     assert "[P1] First paragraph.\n\n[P2] Second paragraph." in text
     assert "[S1] One sentence.\n[S2] Another sentence." in text
     assert text.index("THE CHAPTER") < text.index("THE SCRIPT")
+
+
+def test_a_line_that_holds_only_spaces_ends_a_paragraph_too() -> None:
+    # A text pasted from a browser often has such lines.
+    text = numbered_texts("One.\n \t\nTwo.", [])
+
+    assert "[P1] One.\n\n[P2] Two." in text
+
+
+def test_the_instructions_say_how_the_texts_are_numbered() -> None:
+    assert "[S7]" in INSTRUCTIONS
+    assert "[P3]" in INSTRUCTIONS

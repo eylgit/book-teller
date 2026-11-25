@@ -16,8 +16,11 @@ no example, no opinion and no conclusion that is not in the chapter. Keep the \
 strength of the author's words: do not turn "may" into "will". It is a short \
 telling, so leave out details, but keep every important point.
 
-Write for the ear: plain sentences that are easy to follow when they are \
-heard once. Say whose ideas they are, such as "the author says".
+Write for the ear: short, plain sentences that are easy to follow when they \
+are heard once. A sentence holds one idea and has at most about 25 words. \
+Make clear at the start that the episode tells what the author says. After \
+that, name the author only now and then: do not start sentence after sentence \
+with "the author says" or "he says".
 
 The script is about a quarter to a third as long as the chapter, and never \
 longer than 1,300 words."""

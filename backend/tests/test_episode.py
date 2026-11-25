@@ -1,11 +1,14 @@
 """Tests of the graph of two steps: write, then check. No model and no HTTP."""
 
+from pathlib import Path
+
 import pytest
+from pydantic import BaseModel
 
 from book_teller.check_step import INSTRUCTIONS as CHECK_INSTRUCTIONS
 from book_teller.check_step import Flags
 from book_teller.episode import RETRY, Cost, EpisodeState, picture, run_episode
-from book_teller.model_call import ModelCallError, Reason
+from book_teller.model_call import ModelAnswer, ModelCallError, Reason
 from book_teller.write_step import INSTRUCTIONS as WRITE_INSTRUCTIONS
 from book_teller.write_step import Script
 from fake_ask import FLAGS, SCRIPT, FakeAsk
@@ -134,3 +137,45 @@ def test_the_picture_of_the_graph_shows_write_and_then_check() -> None:
     assert "__start__ --> write;" in drawn
     assert "write --> check;" in drawn
     assert "check --> __end__;" in drawn
+
+
+def test_without_a_rule_handed_in_the_graph_uses_its_own_retry_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The other tests hand in a copy of the rule that does not wait. This one
+    # hands in nothing, as the real code does. Only the waiting is switched off.
+    waits: list[float] = []
+    monkeypatch.setattr("time.sleep", waits.append)
+    ask = FakeAsk(fail_always={Script: failure(Reason.NO_PERMISSION)})
+
+    with pytest.raises(ModelCallError):
+        run_episode(CHAPTER, ask)
+    # Our rule gives "no permission" no second try. LangGraph's own would.
+    assert ask.shapes() == [Script]
+
+    ask = FakeAsk(fail_always={Script: failure(Reason.TIMEOUT)})
+    with pytest.raises(ModelCallError):
+        run_episode(CHAPTER, ask)
+    # Two tries, with one wait between them.
+    assert ask.shapes() == [Script, Script]
+    assert len(waits) == 1
+
+
+def test_an_error_that_is_not_of_the_model_call_gets_no_second_try() -> None:
+    asked: list[type[BaseModel]] = []
+
+    def broken[Shape: BaseModel](
+        instructions: str, text: str, shape: type[Shape]
+    ) -> ModelAnswer[Shape]:
+        asked.append(shape)
+        raise ConnectionError("not a ModelCallError")
+
+    with pytest.raises(ConnectionError):
+        run_episode(CHAPTER, broken, NO_WAIT)
+    assert asked == [Script]
+
+
+def test_the_picture_in_the_readme_is_the_one_that_the_library_prints() -> None:
+    readme = Path(__file__).parents[2] / "README.md"
+
+    assert picture().strip() in readme.read_text(encoding="utf-8")

@@ -16,7 +16,7 @@ run fails, it starts again from the first step.
 
 import operator
 from dataclasses import dataclass
-from typing import Annotated, Any, Protocol, TypedDict, cast
+from typing import Annotated, Protocol, TypedDict, cast
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -42,7 +42,11 @@ class Ask(Protocol):
 
 @dataclass(frozen=True)
 class Cost:
-    """What the model call of one step cost."""
+    """What the model call of one step cost.
+
+    Only a call that answered has a line. A try that failed is not counted:
+    the model call raises before it gives the token counts.
+    """
 
     step: str
     tokens_in: int
@@ -72,6 +76,9 @@ class EpisodeState(TypedDict, total=False):
 
 # A second try can mend these. It cannot mend "no permission", "refused" or
 # "wrong shape": the next try would end the same way.
+# "service error" is wide: model_call.py gives it to everything else that goes
+# wrong. So it also holds a request that the service does not accept, and a
+# login that did not work. Those get a second try too, for nothing.
 WORTH_A_SECOND_TRY = frozenset(
     {Reason.TIMEOUT, Reason.TOO_MANY_REQUESTS, Reason.SERVICE_ERROR}
 )
@@ -80,7 +87,8 @@ WORTH_A_SECOND_TRY = frozenset(
 def worth_a_second_try(error: Exception) -> bool:
     """Our answer to LangGraph's question: run the failed node again?
 
-    Left alone, LangGraph tries again after almost every kind of error.
+    LangGraph's own answer is yes for every ModelCallError, so also for a
+    refused login.
     """
     return isinstance(error, ModelCallError) and error.reason in WORTH_A_SECOND_TRY
 
@@ -90,7 +98,7 @@ def worth_a_second_try(error: Exception) -> bool:
 # itself (RETRIES in model_call.py), so one step can make up to six.
 RETRY = RetryPolicy(max_attempts=2, retry_on=worth_a_second_try)
 
-type EpisodeGraph = CompiledStateGraph[EpisodeState, Any, EpisodeState, EpisodeState]
+type EpisodeGraph = CompiledStateGraph[EpisodeState, None, EpisodeState, EpisodeState]
 
 
 def build_graph(ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeGraph:
@@ -131,7 +139,8 @@ def build_graph(ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeGraph:
 def run_episode(chapter: str, ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeState:
     """One run of the graph, from the chapter to the last state."""
     last_state = build_graph(ask, retry).invoke({"chapter": chapter})
-    # LangGraph types the answer of "invoke" loosely. It is our state.
+    # LangGraph types this answer of "invoke" as a dictionary of anything.
+    # It is our state.
     return cast(EpisodeState, last_state)
 
 
@@ -146,7 +155,7 @@ def picture() -> str:
     return build_graph(never_asked).get_graph().draw_mermaid()
 
 
-def _cost(step: str, answer: ModelAnswer[Any]) -> Cost:
+def _cost(step: str, answer: ModelAnswer[object]) -> Cost:
     return Cost(
         step=step,
         tokens_in=answer.tokens_in,
