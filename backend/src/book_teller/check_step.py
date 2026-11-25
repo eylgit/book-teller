@@ -85,19 +85,27 @@ class Flags(BaseModel):
     )
 
 
-def numbered_texts(chapter: str, sentences: Sequence[str]) -> str:
-    """The chapter and the script as one text, with every part numbered.
+def paragraphs(chapter: str) -> list[str]:
+    """The paragraphs of the chapter, in order. Paragraph 1 is the first item.
 
-    A blank line ends a paragraph of the chapter. A line that holds only
-    spaces counts as blank.
+    A blank line ends a paragraph. A line that holds only spaces counts as
+    blank. Inside a paragraph, a line break becomes a space.
+
+    The numbering below and the guard both use this function, so "P7" is the
+    same paragraph for the checker and for the guard.
     """
-    paragraphs = [
+    return [
         " ".join(block.split())
         for block in re.split(r"\n\s*\n", chapter)
         if block.strip()
     ]
+
+
+def numbered_texts(chapter: str, sentences: Sequence[str]) -> str:
+    """The chapter and the script as one text, with every part numbered."""
     chapter_text = "\n\n".join(
-        f"[P{number}] {paragraph}" for number, paragraph in enumerate(paragraphs, 1)
+        f"[P{number}] {paragraph}"
+        for number, paragraph in enumerate(paragraphs(chapter), 1)
     )
     script_text = numbered_script(sentences)
     return f"THE CHAPTER\n\n{chapter_text}\n\nTHE SCRIPT\n\n{script_text}"
