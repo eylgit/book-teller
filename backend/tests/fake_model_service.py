@@ -3,6 +3,18 @@
 Our code, LangChain and OpenAI's library all run for real. Only the last
 step is replaced: the request never leaves the machine. The fake keeps each
 request, so a test can read it, and gives back an answer that the test chose.
+
+Nothing is replaced globally. The fake is handed in:
+
+1. A test makes a FakeModelService with the answers it wants.
+2. FakeModelService.client() builds an HTTP client whose transport, the part
+   that would reach the network, is our own function _answer.
+3. The test hands that client to make_model(..., http_client=...), which
+   hands it to LangChain's model class, which hands it to OpenAI's library.
+4. When the library sends a request, it lands in _answer.
+
+The price: the answers below are written in the form of OpenAI's Responses
+API. A change of the model's maker means writing them again.
 """
 
 import json

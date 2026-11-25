@@ -84,7 +84,8 @@ def test_the_request_holds_the_thinking_setting() -> None:
 
 
 def test_the_request_carries_the_timeout_from_the_settings() -> None:
-    # Without it, the library would wait ten minutes for one try.
+    # Without it, the model class sets no limit at all: a try that hangs
+    # would wait for ever.
     service = FakeModelService(GOOD)
     ask(service)
 

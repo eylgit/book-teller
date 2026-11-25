@@ -1,6 +1,6 @@
 # Task 4: the model call
 
-**State:** planned on 2026-11-24. The maintainer said yes to the plan on the same day, with the three answers below. The bug report was then tested, and the maintainer chose on 2026-11-25 not to code around it. The code is built, the real calls are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end.
+**State:** planned on 2026-11-24. The maintainer said yes to the plan on the same day, with the three answers below. The bug report was then tested, and the maintainer chose on 2026-11-25 not to code around it. The code is built, the real calls are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end. Merged on 2026-11-25. A second, small pull request followed the merge: it corrects two comments and four sentences of this plan that a later reading of the libraries' code showed to be wrong, and says at the top of the fake how it is handed in.
 
 It is the fourth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -26,11 +26,11 @@ After this task the app still does not call the model for a visitor. The two ste
 **The call, in plain sight.** LangChain's model class has defaults that hide choices. This file names each one:
 
 - **The Responses API,** by name (`use_responses_api=True`). OpenAI has two addresses that take a request, Chat Completions and the newer Responses. The class moves to Responses by itself once a thinking setting is given. Naming it means the code says what happens.
-- **The strict shape,** by name (`method="json_schema"`, `strict=True`). The plan first said that the default of the class is another method, function calling, which does not force the shape. The review found that this is true only of the parent class: `ChatOpenAI` of the installed version asks for the strict shape by itself. The two words stay in the code, so that a test fails if a later version changes its mind.
+- **The strict shape,** by name (`method="json_schema"`, `strict=True`). The plan first said that the default of the class is another method, function calling, which does not force the shape. The review found that this is true only of the parent class: `ChatOpenAI` of the installed version asks for the strict shape by itself. The two words stay in the code to say what is meant. Today they change nothing: with `strict=False` the request would still say `"strict": true`, because OpenAI's library sets it for every Pydantic class. What holds the behaviour is the test that reads the request.
 - **The thinking setting** (`reasoning.effort`). Most output tokens of the probe were thinking: 4,992 of 5,913. So it is the first lever on cost and on time. It starts at `low`, and the measuring script shows what `low` and `medium` cost.
 - **A timeout and the number of retries,** both written out: two retries, so at most three requests for one call. The library retries by itself on "too many requests" (status 429) and on server errors, with a growing wait.
 - **Nothing is kept at the service** (`store=False`). The Responses API keeps every request and its answer unless the request says no. The first real answer showed it: `"store": true`. One call needs nothing kept; what a run did is recorded on our side, by the tracing of a later task.
-- **No cap of our own on output tokens** (the maintainer, 2026-11-25). The first version had a setting for one, as a guard on cost. It was taken out: the limit on the pasted text and the timeout already guard the cost, and a cap brings the cut-off answer close to normal use. An answer can still be cut off, at the model's own limit. Such an answer is half a JSON text or holds no text at all. It fails the check of the shape and never passes as an answer: two tests hold this.
+- **No cap of our own on output tokens** (the maintainer, 2026-11-25). The first version had a setting for one, as a guard on cost. It was taken out: the timeout guards the cost now, the limit on the pasted text and the daily money cap come with a later task, and a cap brings the cut-off answer close to normal use. An answer can still be cut off, at the model's own limit. Such an answer is half a JSON text or holds no text at all. It fails the check of the shape and never passes as an answer: two tests hold this.
 
 **One error with a reason.** Whatever goes wrong in the call, the caller gets a `ModelCallError` with one of these reasons: `timeout` · `too many requests` · `no permission` · `refused` (the model would not answer) · `wrong shape` · `service error`. The words of the library stay inside the error, so nothing is hidden.
 
@@ -86,7 +86,7 @@ The maintainer installs them. Each is asked for here.
 1. `uv run pytest` passes with no network, and the new tests were seen to fail first.
 2. `ruff` and `mypy` pass, and a warning still fails the test run.
 3. The maintainer saw one real call answer in the fixed shape, logged in with no key. The fixed answers of the tests have the form of that real answer.
-4. The maintainer saw the real request once, as the library logs it: the Responses address, the strict shape, the thinking setting.
+4. The maintainer saw the real request once, as the measuring script prints it: the Responses address, the strict shape, the thinking setting.
 5. The measuring table exists for at least `low` and `medium`, and its numbers are written into this plan. The thinking setting and the timeout get their values from it.
 6. The maintainer saw a real answer cut off, and it was an error: `wrong shape`, with the library's words inside.
 7. The app starts without any of the new settings: the page and `/health` answer, and the pipeline deploys as before.
@@ -177,7 +177,7 @@ A second agent reviewed the change in a fresh session. It also changed the code 
 
 - **Three kinds of error left `ask_model` without the project's own error:** a login that fails, an answer that the service marks as failed, and an answer that is not JSON. Now everything else that goes wrong becomes a `service error`. Two tests are new.
 - **A false sentence, in the code and in this plan:** that the class does not force the shape unless told. Corrected above.
-- **No test saw that the timeout reaches the library.** With that line gone, a call that hangs would have waited ten minutes. One test is new.
+- **No test saw that the timeout reaches the library.** With that line gone, the model class sets no limit at all, and a call that hangs would wait for ever. One test is new.
 - **A thinking setting that was set but empty went to the service as an empty text.** It now gets the default, as the other settings do.
 - **Two tests could not say no.** The test of the thinking setting passed with the value written into the code, because the settings of the tests held the same value. And nothing held the default timeout.
 - **The text above the printing of requests promised too much.** It prints no address and no token, but it prints the messages of the service as they come.
