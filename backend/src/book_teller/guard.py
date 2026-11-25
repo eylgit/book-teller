@@ -57,12 +57,13 @@ def clean(text: str) -> str:
 
     Small letters, plain quote marks, no underscores (a plain text marks
     italics with them), and one space where there were several or a line
-    break. A model often changes these when it copies, and none of them
-    changes what the words say.
+    break. A model often changes these when it copies, and they seldom
+    change what the words say.
 
     Everything else must match letter for letter. So a true quote with
-    another kind of dash is not found. That is the price of never passing a
-    quote that is only close to the chapter.
+    another kind of dash, or one that the model shortened with "...", is not
+    found. That is the price of not passing a quote that is only close to
+    the chapter.
     """
     for curly, plain in (("‘", "'"), ("’", "'"), ("“", '"'), ("”", '"')):
         text = text.replace(curly, plain)
@@ -91,6 +92,10 @@ def _find(quote: str, named: int, cleaned: Sequence[str]) -> int:
 
     The paragraph that the checker named is looked at first. After it, every
     paragraph from the first on. A quote must lie inside one paragraph.
+
+    A known limit: the quote is searched as a run of letters, not of words.
+    So it may start or end in the middle of a word: "he is not" is found in
+    "she is nothing".
     """
     wanted = clean(quote)
     # An empty text is "in" every text. It proves nothing.

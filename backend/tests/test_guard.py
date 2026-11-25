@@ -75,6 +75,51 @@ def test_a_quote_that_differs_only_in_small_things_is_proven(
     assert checked.found_in == paragraph
 
 
+def test_a_plain_apostrophe_matches_a_curly_one() -> None:
+    # A book prints "isn’t" with a curly mark. A model often answers with
+    # the plain one of the keyboard. The same holds the other way round.
+    chapter = "It isn’t so, he said.\n\nHe called it a ‘second nature’."
+
+    (first, second, third) = check_flags(
+        chapter,
+        SCRIPT,
+        [flag("it isn't so"), flag("a 'second nature'"), flag("It isn’t so")],
+    )
+
+    assert (first.found_in, second.found_in, third.found_in) == (1, 2, 1)
+
+
+@pytest.mark.parametrize("paragraph", [0, -1, 4, 99])
+def test_a_paragraph_number_that_does_not_exist_does_no_harm(paragraph: int) -> None:
+    # The chapter has three paragraphs. The guard does not trust the
+    # checker's number: it finds the quote where it really is.
+    checked = check(flag("Habit is a", paragraph=paragraph))
+
+    assert checked.proven
+    assert checked.found_in == 1
+
+
+def test_in_an_empty_chapter_no_quote_is_found() -> None:
+    (checked,) = check_flags("", SCRIPT, [flag("Habit is a")])
+
+    assert checked.problems == (Problem.QUOTE_NOT_FOUND,)
+
+
+def test_in_an_empty_script_no_sentence_exists() -> None:
+    first, left_out = check_flags(
+        CHAPTER,
+        [],
+        [
+            flag("Habit is a", sentence=1),
+            flag("Habit is a", sentence=0, kind=Kind.LEFT_OUT),
+        ],
+    )
+
+    assert first.problems == (Problem.NO_SUCH_SENTENCE,)
+    # A point that was left out names no sentence, so it needs none.
+    assert left_out.proven
+
+
 def test_a_quote_with_one_word_changed_is_not_proven() -> None:
     checked = check(flag("The nervous system shrinks to the modes", paragraph=3))
 

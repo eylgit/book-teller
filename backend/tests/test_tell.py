@@ -1,4 +1,4 @@
-"""Tests of the script that runs the two steps by hand. No real call."""
+"""Tests of the script that runs the steps of an episode by hand. No real call."""
 
 import io
 from pathlib import Path

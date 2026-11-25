@@ -1,4 +1,4 @@
-r"""Tell one chapter: run the two steps, write and check, with the real model.
+r"""Tell one chapter: run the steps of an episode, with the real model.
 
 Started by hand. It makes REAL calls, which cost money: two for one run, and
 more when a step is tried again. The cost that it prints leaves out a try
@@ -63,7 +63,8 @@ def tell(chapter: str, ask: Ask, out: TextIO) -> int:
     for checked in not_proven:
         flag = checked.flag
         out.write(_first_line(flag))
-        # The paragraph that the checker named. The guard did not confirm it.
+        # The quote and the paragraph as the checker gave them. A flag that
+        # is not proven is printed so, whatever its problem is.
         out.write(f'  the checker\'s quote, P{flag.paragraph}: "{flag.quote}"\n')
         problems = ", ".join(problem.value for problem in checked.problems)
         out.write(f"  the problem: {problems}\n")

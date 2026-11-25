@@ -1,6 +1,6 @@
 """The write step: what the writer is told, and the shape of its answer.
 
-The writer is the first of the two steps of an episode. It gets one chapter
+The writer is the first step of an episode. It gets one chapter
 and tells it as the script of a podcast episode. The graph that runs the
 step is in episode.py.
 """

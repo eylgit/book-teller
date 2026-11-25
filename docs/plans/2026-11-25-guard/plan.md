@@ -1,6 +1,6 @@
 # Task 6: the guard
 
-**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. Nothing is built yet.
+**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, and one real run is made: see "What was seen". A second agent has reviewed the change: see "What the review changed". Still to come: the pull request with the planted fault, and the merge.
 
 It is the sixth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -26,7 +26,7 @@ After this task the app still does not call the model for a visitor. The route t
 1. **The sentence number.** It must be between 1 and the number of sentences of the script. 0 is right only for the kind `left_out`, where no sentence holds the fault.
 2. **The quote.** It must be found in one paragraph of the chapter. Both texts are cleaned first, and then compared letter for letter: see question 2.
 
-The guard does not trust the paragraph number of the checker. It searches every paragraph and keeps the number of the paragraph where the quote really is. The checker's own number stays beside it.
+The guard does not trust the paragraph number of the checker. It looks first at the paragraph that the checker named, then at every other one, and keeps the number of the paragraph where the quote really is. The checker's own number stays beside it.
 
 **The result** is one line for each flag, in the same order: the flag as the checker gave it, the paragraph where the quote was found (0 for none), and the list of problems. No problem means proven. The names of the problems: `no_such_sentence` and `quote_not_found`.
 
@@ -146,9 +146,10 @@ Seen once by the maintainer:
 It is said here, and in the README, so that nobody reads "proven" as more than it is.
 
 - **A real quote that proves nothing.** The guard knows that the words are in the chapter. It does not know whether they show that the script is wrong. A quote of one common word is "found".
+- **A made-up quote that is built of pieces of real words.** The quote is compared by letters, not by words, so it may start or end in the middle of a word: "he is not" is found in "she is nothing". Found in the review, and left so by the maintainer: see "What the review changed".
 - **A fault that the checker did not flag.** The guard sees only what the checker reports. Task 11 measures what the checker misses.
 - **A wrong kind or a wrong reason.** Both are the model's words, and nothing checks them.
-- **A true quote in other letters:** another kind of dash, a spelling that the model "mended". It is marked as not found. This is the price of not passing a made-up quote.
+- **A true quote in other letters:** another kind of dash, a spelling that the model "mended", a quote that the model shortened with "..." in the middle, a letter with an accent that is stored in another way. It is marked as not found. This is the price of not passing a made-up quote.
 - **A chapter of any length.** Nothing limits the pasted text yet, and nothing caps the cost of a day. Both come in task 9.
 
 ## What could go wrong
@@ -158,6 +159,32 @@ It is said here, and in the README, so that nobody reads "proven" as more than i
 - **A planted fault that no test notices.** See above: the missing test is written first.
 - **The planted fault reaches `main`.** It cannot be merged while the pipeline fails, and the commit that takes it back comes before the merge. The last run before the merge must be the passed one.
 - **The agent cannot reach Azure.** The maintainer makes the real run, and the agent reads the output.
+
+## What was seen
+
+**The real run** (2026-11-25), with the chapter of the probe:
+
+| Step | Tokens in | Tokens out | Of them thinking | Seconds |
+|---|---|---|---|---|
+| `write` | 4,069 | 1,743 | 128 | 18.3 |
+| `check` | 6,282 | 946 | 896 | 7.5 |
+
+Both steps answered at the first try. The writer gave 100 sentences. **The checker flagged nothing,** so the guard had nothing to check.
+
+- **What the run shows:** the graph runs with its third node and the real model, and a run with no flag ends well.
+- **What it does not show:** the guard at work on a real flag. Exit criterion 3 is met only in an empty way: "every flag" was no flag. The maintainer chose to leave it so. The tests hold the guard, and task 11 runs it on a script with planted faults.
+
+## What the review changed
+
+A second agent reviewed the change in a fresh session. **It reviewed by reading only:** it ran no test, and it did not try small changes of the code to see which a test notices, as the reviews of tasks 4 and 5 did. The maintainer chose to leave that part out. So the planted fault of the pull request is the one proof here that the tests can fail. The maintainer decided on each finding.
+
+- **The quote is compared by letters, not by words,** so a quote may start or end in the middle of a word. **Left so, and said** (the maintainer): in the code, in the README and above, under "What a check like this cannot catch". The other way, a match on whole words only, was the agent's proposal.
+- **A flag with a real quote and a sentence number that does not exist** is printed by `tell.py` under "NOT PROVEN" with the checker's own paragraph number, though the guard knows the real one. **Left so** (the maintainer): the flag is marked as not proven, and that is what matters.
+- **Tests added for what no test held:** a single curly quote mark against a plain apostrophe · a paragraph number of 0, below 0 and above the count · an empty chapter · an empty script. All passed at once: the code was right, and now a test holds it.
+- **"The two steps" stood in five places** where there are three steps now. Corrected.
+- **Three sentences promised too much:** that the clean-up never changes what the words say, that a close quote never passes, and that the guard "searches every paragraph" with no word on the one that it looks at first. Corrected.
+- **Limits that were not said:** a quote shortened with "...", and letters stored in another way. Said above.
+- **Not taken:** to drop the rule that the paragraph which the checker named is looked at first. Without it the guard could show another number than a checker that was right.
 
 ## How it is undone
 

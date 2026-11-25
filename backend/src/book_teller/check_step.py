@@ -1,6 +1,6 @@
 """The check step: what the checker is told, and the shape of its answer.
 
-The checker is the second of the two steps of an episode. It gets the
+The checker is the second step of an episode, after the writer. It gets the
 chapter and the script, both numbered, and lists every fault that it finds
 in the script. The graph that runs the step is in episode.py.
 """

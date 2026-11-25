@@ -66,9 +66,9 @@ PYTHONPATH=src uv run --env-file .env python -m book_teller.measure --thinking l
 
 With `--show` it also prints each request and each answer, made short.
 
-## The two steps
+## The steps of an episode
 
-An episode is made in two steps, and each step is one model call. The first writes the script from a chapter. The second checks that script against the chapter and lists every fault that it finds, each with the words of the chapter that prove it. A third step, with no model in it, checks that list: see "The guard" below. [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) runs the steps and carries the data from one to the next. The whole graph is one file, [backend/src/book_teller/episode.py](backend/src/book_teller/episode.py). This picture is printed by the library from that code, and a test holds that the two stay the same:
+An episode is made in three steps. The first two are one model call each. The first writes the script from a chapter. The second checks that script against the chapter and lists every fault that it finds, each with the words of the chapter that prove it. The third has no model in it: plain code checks that list, see "The guard" below. [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) runs the steps and carries the data from one to the next. The whole graph is one file, [backend/src/book_teller/episode.py](backend/src/book_teller/episode.py). This picture is printed by the library from that code, and a test holds that the two stay the same:
 
 ```mermaid
 ---
@@ -96,7 +96,7 @@ graph TD;
 - **Nothing is saved between the steps yet.** A run that fails starts again from the first step.
 - **The tests hand the graph a fake "ask the model",** so they need no network and cost nothing.
 
-Two steps do not need a graph. The whole book of the next milestone does: a run must go on after a failure. Why each choice was made, and what the first real runs showed: [the plan of that task](docs/plans/2026-11-25-two_step_graph/plan.md).
+Three steps in a row do not need a graph. The whole book of the next milestone does: a run must go on after a failure. Why each choice was made, and what the first real runs showed: [the plan of that task](docs/plans/2026-11-25-two_step_graph/plan.md).
 
 **To tell one chapter,** run this inside the folder `backend`, with the settings of "The model call". It makes two real calls, so it costs money: about one or two US cents.
 
@@ -113,7 +113,7 @@ The checker is a model, and a model can make a quote up. So plain code checks ev
 There are two checks:
 
 - **The shape.** The answer must be a list of faults, each with a number for the sentence, one of six names for the kind, a number for the paragraph, a quote and a reason. Pydantic compares the answer with a class, inside the model call. An answer in another shape ends the run.
-- **Each fault.** Its sentence number must point at a sentence of the script. Its quote must be in the chapter, inside one paragraph. Both texts are cleaned before they are compared: small letters, plain quote marks, no underscores, single spaces. After that the quote must match letter for letter.
+- **Each fault.** Its sentence number must point at a sentence of the script. Its quote must be in the chapter, inside one paragraph. The paragraph that the checker named is looked at first, then every other one. Both texts are cleaned before they are compared: small letters, plain quote marks, no underscores, single spaces. After that the quote must match letter for letter.
 
 **A fault that fails the second check is not dropped.** It stays in the result, marked as not proven, with what is wrong: `no_such_sentence` or `quote_not_found`. A reader can then see everything that the checker said, and how far to trust each line.
 
@@ -121,7 +121,8 @@ There are two checks:
 
 - The guard knows that the quote is in the chapter. It does not know whether the quote shows that the script is wrong.
 - It sees only the faults that the checker reports, not the ones that the checker missed.
-- A true quote that the model copied with another kind of dash is marked as not found. A looser comparison would also pass a made-up quote that is close to a real sentence.
+- **The quote is compared by letters, not by words.** So it may start or end in the middle of a word: the quote "he is not" is found in "she is nothing". A made-up quote that happens to be built of such pieces passes as proven.
+- A true quote that the model copied with another kind of dash, or shortened with "..." in the middle, is marked as not found. A looser comparison would also pass a made-up quote that is close to a real sentence.
 - Nothing limits the length of a chapter yet.
 
 Why each choice was made: [the plan of that task](docs/plans/2026-11-25-guard/plan.md).
