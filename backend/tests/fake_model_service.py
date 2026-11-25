@@ -104,12 +104,24 @@ def text_answer(text: str) -> Reply:
 
 
 def cut_off_answer(text: str) -> Reply:
-    """An answer that stopped at the cap on output tokens, in the middle of its text."""
+    """An answer that stopped at a limit on output tokens, in the middle of its text."""
     return answer(
         [{"type": "output_text", "text": text, "annotations": []}],
         status="incomplete",
         incomplete_details={"reason": "max_output_tokens"},
     )
+
+
+def cut_off_while_thinking() -> Reply:
+    """An answer that reached the limit before the model wrote any text.
+
+    The thinking used up all the tokens, so the answer holds no message.
+    """
+    reply = answer(
+        [], status="incomplete", incomplete_details={"reason": "max_output_tokens"}
+    )
+    reply.body["output"] = [{"id": "rs_1", "type": "reasoning", "summary": []}]
+    return reply
 
 
 def refusal(words: str) -> Reply:

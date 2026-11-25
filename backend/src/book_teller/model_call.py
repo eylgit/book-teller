@@ -1,8 +1,8 @@
 """The model call. Every call of the app to the model goes through this file.
 
 LangChain's model class has defaults that hide choices. This file names each
-one: which API, the strict shape, the thinking setting, the timeout, the
-number of tries, and the cap on output tokens.
+one: which API, the strict shape, the thinking setting, the timeout, and the
+number of tries.
 """
 
 import time
@@ -13,15 +13,16 @@ from typing import Any, cast
 
 import httpx2
 import openai
+from langchain_core.exceptions import ModelRefusalError
 from langchain_openai import ChatOpenAI
-from langchain_openai.chat_models.base import OpenAIRefusalError
 from pydantic import BaseModel, ValidationError
 
 from book_teller.settings import ModelSettings
 
 # After a first try that fails with "too many requests", a timeout or an error
 # of the service, the library tries again this many times, with a growing wait.
-# So one call makes at most three requests.
+# So one call makes at most three requests. Two is also what the library does
+# by itself today; it is written out so that the number is in plain sight.
 RETRIES = 2
 
 # The login token is asked for this service. Azure checks that a token was
@@ -67,6 +68,7 @@ def azure_login() -> Callable[[], str]:
     On a developer's machine the login of the Azure CLI is used. In the cloud
     it is the managed identity of the app.
     """
+    # Loaded here, not at the top: only a real call needs this library.
     from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
     return get_bearer_token_provider(DefaultAzureCredential(), TOKEN_AUDIENCE)
@@ -91,11 +93,12 @@ def make_model(
         # because of the thinking setting below. Here the code says so.
         use_responses_api=True,
         reasoning={"effort": settings.thinking},
+        # The Responses API keeps every request and its answer at the service
+        # unless the request says no. We send one request and never ask for
+        # an old answer again, so nothing needs to be kept there.
+        store=False,
         timeout=settings.timeout_seconds,
         max_retries=RETRIES,
-        # The class has this older name for the cap. The request that goes out
-        # names it max_output_tokens: a test reads it there.
-        max_completion_tokens=settings.max_output_tokens,
         http_client=http_client,
     )
 
@@ -108,7 +111,8 @@ def ask_model[Shape: BaseModel](
     Raises ModelCallError, with its reason, whenever no good answer came.
     """
     # "json_schema" with "strict": the service itself forces the shape. The
-    # default of the class is another method, which does not force it.
+    # class does the same by itself today for a Pydantic shape. Both are
+    # written out, so that a test fails if a later version changes its mind.
     # "include_raw": the token counts come back beside the parsed answer.
     asker = model.with_structured_output(
         shape, method="json_schema", strict=True, include_raw=True
@@ -120,7 +124,7 @@ def ask_model[Shape: BaseModel](
             asker.invoke([("system", instructions), ("user", text)]),
         )
     except ValidationError as error:
-        # Also an answer that was cut off at the cap on output tokens ends
+        # Also an answer that was cut off at a limit on output tokens ends
         # here, as "Invalid JSON": bug report 41688 of langchain-openai. See
         # the test of that case.
         raise ModelCallError(Reason.WRONG_SHAPE, str(error)) from error
@@ -130,15 +134,17 @@ def ask_model[Shape: BaseModel](
         raise ModelCallError(Reason.TOO_MANY_REQUESTS, str(error)) from error
     except (openai.AuthenticationError, openai.PermissionDeniedError) as error:
         raise ModelCallError(Reason.NO_PERMISSION, str(error)) from error
-    except openai.APIError as error:
+    except Exception as error:
+        # Everything else: an error of the service, a network that is down, an
+        # answer that the service marks as failed, a login that did not work.
         raise ModelCallError(Reason.SERVICE_ERROR, str(error)) from error
     seconds = time.monotonic() - started
 
     problem = result["parsing_error"]
-    if isinstance(problem, OpenAIRefusalError):
+    if isinstance(problem, ModelRefusalError):
         raise ModelCallError(Reason.REFUSED, str(problem)) from problem
     parsed = result["parsed"]
-    if problem is not None or not isinstance(parsed, shape):
+    if not isinstance(parsed, shape):
         raise ModelCallError(Reason.WRONG_SHAPE, str(problem)) from problem
 
     usage = result["raw"].usage_metadata or {}

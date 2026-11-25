@@ -21,33 +21,28 @@ class ModelSettings:
     endpoint: str
     # The name that the model has in the Azure resource.
     deployment: str
-    # How long the model thinks before it answers: "low", "medium" or "high".
+    # How long the model thinks before it answers, e.g. "minimal", "low" or
+    # "medium".
     # More thinking costs more tokens and more seconds.
     thinking: str = "low"
     # One try gives up after so many seconds. A call is tried three times.
-    timeout_seconds: float = 120
-    # The answer and the thinking together may not be longer than this.
-    max_output_tokens: int = 8000
+    # Measured on 2026-11-25: "low" took about 15 seconds, "medium" about 39.
+    timeout_seconds: float = 60
 
 
 def read_model_settings(environment: Mapping[str, str] | None = None) -> ModelSettings:
     """Read the settings from the environment variables, or from the given ones."""
     if environment is None:
         environment = os.environ
-    defaults = ModelSettings(endpoint="", deployment="")
     return ModelSettings(
         endpoint=_needed(environment, "BOOK_TELLER_MODEL_ENDPOINT"),
         deployment=_needed(environment, "BOOK_TELLER_MODEL_DEPLOYMENT"),
-        thinking=environment.get("BOOK_TELLER_MODEL_THINKING", defaults.thinking),
+        thinking=environment.get("BOOK_TELLER_MODEL_THINKING", "").strip()
+        or ModelSettings.thinking,
         timeout_seconds=_number(
-            environment, "BOOK_TELLER_MODEL_TIMEOUT_SECONDS", defaults.timeout_seconds
-        ),
-        max_output_tokens=int(
-            _number(
-                environment,
-                "BOOK_TELLER_MODEL_MAX_OUTPUT_TOKENS",
-                defaults.max_output_tokens,
-            )
+            environment,
+            "BOOK_TELLER_MODEL_TIMEOUT_SECONDS",
+            ModelSettings.timeout_seconds,
         ),
     )
 
