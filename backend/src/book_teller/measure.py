@@ -6,8 +6,9 @@ thinking setting that is named. From the folder "backend":
     PYTHONPATH=src uv run --env-file .env \
         python -m book_teller.measure --thinking low medium
 
-It asks the model to check the script of the probe against its chapter, as
-the product will. The login is the one of the Azure CLI; no key is used.
+It asks the model to check the script of the probe against its chapter, with
+the instructions and the shape of the product's own check step. The login
+is the one of the Azure CLI; no key is used.
 """
 
 import argparse
@@ -16,11 +17,11 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, Literal, TextIO
+from typing import Any, TextIO
 
 import httpx2
-from pydantic import BaseModel
 
+from book_teller import check_step
 from book_teller.model_call import (
     ModelCallError,
     ask_model,
@@ -31,58 +32,20 @@ from book_teller.settings import ModelSettings, SettingsError, read_model_settin
 
 PROBE = Path(__file__).parents[3] / "experiments" / "2026-11-13-probe_planted_faults"
 
-INSTRUCTIONS = """You check the script of a podcast episode against the chapter \
-of the book that it tells.
-The script must say what the author said. It is a short telling, so it may \
-leave out details.
-
-Find every fault in the script. There are six kinds of fault:
-1. a wrong fact;
-2. a concept explained wrongly;
-3. an example that does not match the idea;
-4. a conclusion the author did not draw;
-5. a word that is too strong or too weak, such as "may" turned into "will";
-6. an important point of the author left out.
-
-Every sentence of the script starts with its number, such as [S7].
-Every paragraph of the chapter starts with its number, such as [P3].
-For a fault of kind 6, give 0 as the number of the sentence.
-The quote is copied word for word from the paragraph that proves the fault.
-
-Flag only real faults. If the script has no fault, give an empty list."""
-
-
-class Flag(BaseModel):
-    """One fault that the model found in the script."""
-
-    sentence: int
-    kind: Literal[1, 2, 3, 4, 5, 6]
-    paragraph: int
-    quote: str
-    reason: str
-
-
-class Flags(BaseModel):
-    """The shape of the model's answer: a list of faults."""
-
-    flags: list[Flag]
-
 
 def numbered_texts(chapter_file: Path, script_file: Path) -> str:
-    """The chapter and the script as one text, with every part numbered."""
-    paragraphs = [
-        " ".join(block.split())
-        for block in chapter_file.read_text(encoding="utf-8").split("\n\n")
-        if block.strip()
-    ]
+    """The chapter and the script of two files as one text, every part numbered.
+
+    The script file holds one sentence on a line.
+    """
     sentences = [
         line.strip()
         for line in script_file.read_text(encoding="utf-8").splitlines()
         if line.strip()
     ]
-    chapter = "\n\n".join(f"[P{n}] {p}" for n, p in enumerate(paragraphs, start=1))
-    script = "\n".join(f"[S{n}] {s}" for n, s in enumerate(sentences, start=1))
-    return f"THE CHAPTER\n\n{chapter}\n\nTHE SCRIPT\n\n{script}"
+    return check_step.numbered_texts(
+        chapter_file.read_text(encoding="utf-8"), sentences
+    )
 
 
 def measure(
@@ -103,7 +66,7 @@ def measure(
             replace(settings, thinking=thinking), token_function, http_client
         )
         try:
-            answer = ask_model(model, INSTRUCTIONS, text, Flags)
+            answer = ask_model(model, check_step.INSTRUCTIONS, text, check_step.Flags)
         except ModelCallError as error:
             out.write(f"{thinking:<10}FAILED: {error}\n")
             continue

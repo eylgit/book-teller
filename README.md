@@ -66,6 +66,44 @@ PYTHONPATH=src uv run --env-file .env python -m book_teller.measure --thinking l
 
 With `--show` it also prints each request and each answer, made short.
 
+## The two steps
+
+An episode is made in two steps, and each step is one model call. The first writes the script from a chapter. The second checks that script against the chapter and lists every fault that it finds, each with the words of the chapter that prove it. [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) runs the steps and carries the data from one to the next. The whole graph is one file, [backend/src/book_teller/episode.py](backend/src/book_teller/episode.py). This picture is printed by the library from that code, and a test holds that the two stay the same:
+
+```mermaid
+---
+config:
+  flowchart:
+    curve: linear
+---
+graph TD;
+	__start__([<p>__start__</p>]):::first
+	write(write)
+	check(check)
+	__end__([<p>__end__</p>]):::last
+	__start__ --> write;
+	write --> check;
+	check --> __end__;
+	classDef default fill:#f2f0ff,line-height:1.2
+	classDef first fill-opacity:0
+	classDef last fill:#bfb6fc
+```
+
+- **The state** is what the steps share: the chapter, the script, the faults, and what each call cost.
+- **A step that fails is tried once more,** but only after a timeout, "too many requests" or an error of the service. A second try cannot mend a refused login or an answer in the wrong shape. One weak spot: "an error of the service" is the reason for everything else that goes wrong, so a request that the service does not accept is tried a second time too, for nothing.
+- **Nothing is saved between the steps yet.** A run that fails starts again from the first step.
+- **The tests hand the graph a fake "ask the model",** so they need no network and cost nothing.
+
+Two steps do not need a graph. The whole book of the next milestone does: a run must go on after a failure. Why each choice was made, and what the first real runs showed: [the plan of that task](docs/plans/2026-11-25-two_step_graph/plan.md).
+
+**To tell one chapter,** run this inside the folder `backend`, with the settings of "The model call". It makes two real calls, so it costs money: about one or two US cents.
+
+```
+PYTHONPATH=src uv run --env-file .env python -m book_teller.tell ../experiments/2026-11-13-probe_planted_faults/chapter.txt
+```
+
+It prints the script, the faults and the cost of each step. A try that failed is not in that cost. With `--picture` and no file it asks no model and prints the picture above.
+
 ## How a change gets in
 
 Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it: the tests, the three checks and the smoke test, on a fresh machine in Azure Pipelines. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
