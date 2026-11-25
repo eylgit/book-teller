@@ -1,6 +1,6 @@
 # Task 4: the model call
 
-**State:** planned on 2026-11-24. The maintainer said yes to the plan on the same day, with the three answers below. The bug report was then tested, and the maintainer chose on 2026-11-25 not to code around it. The code is built, the real calls are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end.
+**State:** planned on 2026-11-24. The maintainer said yes to the plan on the same day, with the three answers below. The bug report was then tested, and the maintainer chose on 2026-11-25 not to code around it. The code is built, the real calls are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end. Merged on 2026-11-25. A second, small pull request followed the merge: it corrects two comments and four sentences of this plan that a later reading of the libraries' code showed to be wrong, and says at the top of the fake how it is handed in.
 
 It is the fourth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
