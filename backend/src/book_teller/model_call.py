@@ -110,9 +110,10 @@ def ask_model[Shape: BaseModel](
 
     Raises ModelCallError, with its reason, whenever no good answer came.
     """
-    # "json_schema" with "strict": the service itself forces the shape. The
-    # class does the same by itself today for a Pydantic shape. Both are
-    # written out, so that a test fails if a later version changes its mind.
+    # "json_schema" with "strict": the service itself forces the shape.
+    # Today both words change nothing: for a Pydantic shape the class picks
+    # this method by itself, and OpenAI's library always asks for strict.
+    # They say what is meant, and a test reads the request and holds it.
     # "include_raw": the token counts come back beside the parsed answer.
     asker = model.with_structured_output(
         shape, method="json_schema", strict=True, include_raw=True
