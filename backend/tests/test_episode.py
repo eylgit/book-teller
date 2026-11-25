@@ -1,4 +1,4 @@
-"""Tests of the graph of two steps: write, then check. No model and no HTTP."""
+"""Tests of the graph: write, then check, then the guard. No model and no HTTP."""
 
 from pathlib import Path
 
@@ -6,8 +6,9 @@ import pytest
 from pydantic import BaseModel
 
 from book_teller.check_step import INSTRUCTIONS as CHECK_INSTRUCTIONS
-from book_teller.check_step import Flags
+from book_teller.check_step import Flag, Flags, Kind
 from book_teller.episode import RETRY, Cost, EpisodeState, picture, run_episode
+from book_teller.guard import CheckedFlag, Problem
 from book_teller.model_call import ModelAnswer, ModelCallError, Reason
 from book_teller.write_step import INSTRUCTIONS as WRITE_INSTRUCTIONS
 from book_teller.write_step import Script
@@ -131,12 +132,58 @@ def test_the_retry_rule_gives_two_tries() -> None:
     assert RETRY.max_attempts == 2
 
 
-def test_the_picture_of_the_graph_shows_write_and_then_check() -> None:
+def test_the_picture_of_the_graph_shows_write_then_check_then_guard() -> None:
     drawn = picture()
 
     assert "__start__ --> write;" in drawn
     assert "write --> check;" in drawn
-    assert "check --> __end__;" in drawn
+    assert "check --> guard;" in drawn
+    assert "guard --> __end__;" in drawn
+
+
+def test_the_last_state_holds_the_result_of_the_guard_beside_the_flags() -> None:
+    state = run(FakeAsk())
+
+    # The quote of the fake checker, "in most cases", is in paragraph 2 of
+    # the chapter. The guard got the chapter of this run, and found it there.
+    assert state["checked"] == [
+        CheckedFlag(flag=FLAGS.flags[0], found_in=2, problems=())
+    ]
+    # The checker's own list is still there, as it came.
+    assert state["flags"] == FLAGS.flags
+
+
+def test_a_flag_with_a_made_up_quote_is_marked_and_the_run_ends_well() -> None:
+    made_up = Flag(
+        sentence=1,
+        kind=Kind.WRONG_FACT,
+        paragraph=1,
+        quote="Habit is a third nature.",
+        reason="The script says second.",
+    )
+    state = run(FakeAsk(flags=Flags(flags=[made_up, *FLAGS.flags])))
+
+    # No error, and nothing is dropped: both flags are in the result.
+    assert [checked.flag for checked in state["checked"]] == [made_up, *FLAGS.flags]
+    assert state["checked"][0].problems == (Problem.QUOTE_NOT_FOUND,)
+    assert state["checked"][1].proven
+
+
+def test_the_guard_counts_the_sentences_of_the_writers_script() -> None:
+    # The script of the fake writer has two sentences. A flag on sentence 3
+    # points at nothing.
+    third = FLAGS.flags[0].model_copy(update={"sentence": 3})
+    state = run(FakeAsk(flags=Flags(flags=[third])))
+
+    assert state["checked"][0].problems == (Problem.NO_SUCH_SENTENCE,)
+
+
+def test_the_guard_asks_no_model_and_adds_no_line_of_cost() -> None:
+    ask = FakeAsk()
+    state = run(ask)
+
+    assert ask.shapes() == [Script, Flags]
+    assert [cost.step for cost in state["costs"]] == ["write", "check"]
 
 
 def test_without_a_rule_handed_in_the_graph_uses_its_own_retry_rule(

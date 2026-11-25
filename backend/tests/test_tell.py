@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from book_teller.check_step import Flags
+from book_teller.check_step import Flag, Flags, Kind
 from book_teller.model_call import ModelCallError, Reason, make_model
 from book_teller.settings import ModelSettings
 from book_teller.tell import ask_with, main, tell
 from book_teller.write_step import Script
-from fake_ask import FakeAsk
+from fake_ask import FLAGS, FakeAsk
 from fake_model_service import FakeModelService, text_answer
 
 CHAPTER = "Habit is a second nature.\n\nIn most cases people mean a bad habit."
@@ -26,15 +26,42 @@ def test_a_run_prints_the_script_the_flags_and_the_cost_of_each_step() -> None:
     assert "[S1] James starts with the word habit." in printed
     assert "[S2] Habits can be good." in printed
     # The one flag of the fake checker: its sentence, kind, reason and proof.
-    assert "THE FLAGS: 1" in printed
+    # The paragraph is the one where the guard found the quote, 2. The
+    # checker had named 1.
+    assert "THE FLAGS: 1, of them not proven: 0" in printed
     assert "- S2, wrong_strength: The script says always." in printed
-    assert '  the book, P1: "in most cases"' in printed
+    assert '  the book, P2: "in most cases"' in printed
+    assert "NOT PROVEN" not in printed
     # One line of cost for each step: tokens in, tokens out, thinking, seconds.
     lines = printed.splitlines()
     write_line = next(line for line in lines if line.startswith("write"))
     check_line = next(line for line in lines if line.startswith("check"))
     assert write_line.split() == ["write", "100", "50", "10", "1.5"]
     assert check_line.split() == ["check", "200", "80", "60", "2.5"]
+
+
+def test_a_flag_that_is_not_proven_is_printed_apart_with_its_problems() -> None:
+    made_up = Flag(
+        sentence=7,
+        kind=Kind.WRONG_FACT,
+        paragraph=1,
+        quote="in the year 1890",
+        reason="The script names the wrong year.",
+    )
+    out = io.StringIO()
+
+    assert tell(CHAPTER, FakeAsk(flags=Flags(flags=[made_up, *FLAGS.flags])), out) == 0
+
+    printed = out.getvalue()
+    assert "THE FLAGS: 2, of them not proven: 1" in printed
+    # The proven flag comes first, then the heading, then the other one:
+    # with the quote as the checker gave it, and what the guard found wrong.
+    proven = printed.index("- S2, wrong_strength: The script says always.")
+    heading = printed.index("\nNOT PROVEN\n")
+    not_proven = printed.index("- S7, wrong_fact: The script names the wrong year.")
+    assert proven < heading < not_proven
+    assert '  the checker\'s quote, P1: "in the year 1890"' in printed
+    assert "  the problem: no_such_sentence, quote_not_found" in printed
 
 
 def test_a_call_that_fails_prints_one_line_and_ends_with_1() -> None:
