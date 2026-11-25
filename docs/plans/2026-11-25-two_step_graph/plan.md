@@ -1,6 +1,6 @@
 # Task 5: the graph of two steps
 
-**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the three answers below. The code is built, two real runs are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end.
+**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the three answers below. The code is built, two real runs are made, and a second agent has reviewed the change. What was seen and what the review changed are at the end. Merged on 2026-11-25: the pipeline built the image with the new library and deployed it, and all seven exit criteria are met. A second, small pull request followed the merge, with this final state.
 
 It is the fifth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
