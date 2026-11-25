@@ -1,6 +1,6 @@
 # Task 6: the guard
 
-**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, and one real run is made: see "What was seen". A second agent has reviewed the change: see "What the review changed". Still to come: the pull request with the planted fault, and the merge.
+**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, and one real run is made: see "What was seen". A second agent has reviewed the change: see "What the review changed". The pull request is open and its run passes. The planted fault was left out (the maintainer). Still to come: the maintainer reads `guard.py` line by line, and the merge.
 
 It is the sixth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -69,7 +69,9 @@ Two things are in this pull request and in no other of the milestone.
 
 **1. Its page says how each changed file was checked,** with one of three labels: read line by line by the maintainer · reviewed by a second agent · tests only. `guard.py` is read line by line: the [merge rule](../../../CLAUDE.md) asks for that for the code that checks the model's answer.
 
-**2. A fault is planted on purpose, in public.** A test is worth something only if it fails when the code is wrong. So, after the tests pass:
+**2. A fault planted on purpose, in public. Planned, and left out** (the maintainer, 2026-11-25). The steps below were not done. What this task has in their place: every new test of the guard was seen to fail before the guard was written. What it does not have: a proof that a test fails when the finished code is broken. The plan was:
+
+A test is worth something only if it fails when the code is wrong. So, after the tests pass:
 
 1. The maintainer breaks the guard by hand, in one commit, in two places: the quote check says "found" for every quote, and the class `Flag` takes any text as a kind.
 2. The commit is pushed. The pipeline must fail, and its log names the tests that failed.
@@ -82,7 +84,7 @@ Both commits stay in the history: a merge here is a merge commit, never a squash
 1. `uv run pytest` passes with no network, and the new tests were seen to fail first.
 2. `ruff` and `mypy` pass, and a warning still fails the test run.
 3. The maintainer saw one real run: every flag of the checker came out as proven or as not proven, with its problem.
-4. The history of the pull request holds one failed run of the pipeline, caused by the planted fault, and a passed run after the commit that takes it back.
+4. ~~The history of the pull request holds one failed run of the pipeline, caused by the planted fault, and a passed run after the commit that takes it back.~~ Taken out with the planted fault.
 5. The page of the pull request says how each changed file was checked.
 6. The maintainer has read `guard.py` and the node `guard` line by line.
 7. The picture of the graph in the README shows `write`, `check`, `guard`, as the library prints it.
@@ -129,7 +131,7 @@ Kept as they are: all other tests of tasks 1 to 5. The test of what `tell.py` pr
 Seen once by the maintainer:
 
 20. One real run of `tell.py` with the chapter of the probe.
-21. The planted fault: the failed run and the passed run of the pipeline.
+21. ~~The planted fault: the failed run and the passed run of the pipeline.~~ Left out.
 
 ## The order of the work
 
@@ -138,7 +140,7 @@ Seen once by the maintainer:
 3. `guard.py`, and the changes in `check_step.py`, `episode.py` and `tell.py`. The tests pass.
 4. One real run; what was seen goes into this plan.
 5. The review by a second agent, the fixes, the README.
-6. The pull request. The planted fault: one commit that breaks, one that takes it back.
+6. The pull request. The planted fault was left out.
 7. The maintainer reads `guard.py` line by line. The merge.
 
 ## What a check like this cannot catch
@@ -176,7 +178,7 @@ Both steps answered at the first try. The writer gave 100 sentences. **The check
 
 ## What the review changed
 
-A second agent reviewed the change in a fresh session. **It reviewed by reading only:** it ran no test, and it did not try small changes of the code to see which a test notices, as the reviews of tasks 4 and 5 did. The maintainer chose to leave that part out. So the planted fault of the pull request is the one proof here that the tests can fail. The maintainer decided on each finding.
+A second agent reviewed the change in a fresh session. **It reviewed by reading only:** it ran no test, and it did not try small changes of the code to see which a test notices, as the reviews of tasks 4 and 5 did. The maintainer chose to leave that part out, and later the planted fault too. So nothing in this task broke the finished code to see whether a test fails; a later milestone does that with a tool (mutation testing). The maintainer decided on each finding.
 
 - **The quote is compared by letters, not by words,** so a quote may start or end in the middle of a word. **Left so, and said** (the maintainer): in the code, in the README and above, under "What a check like this cannot catch". The other way, a match on whole words only, was the agent's proposal.
 - **A flag with a real quote and a sentence number that does not exist** is printed by `tell.py` under "NOT PROVEN" with the checker's own paragraph number, though the guard knows the real one. **Left so** (the maintainer): the flag is marked as not proven, and that is what matters.
