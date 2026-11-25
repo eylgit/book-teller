@@ -14,7 +14,7 @@ SETTINGS = ModelSettings(
 )
 
 ONE_FAULT = text_answer(
-    '{"flags": [{"sentence": 3, "kind": 1, "paragraph": 2,'
+    '{"flags": [{"sentence": 3, "kind": "wrong_fact", "paragraph": 2,'
     ' "quote": "in 1851", "reason": "The script says 1852."}]}'
 )
 

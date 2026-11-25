@@ -4,7 +4,7 @@ import pytest
 
 from book_teller.check_step import INSTRUCTIONS as CHECK_INSTRUCTIONS
 from book_teller.check_step import Flags
-from book_teller.episode import RETRY, Cost, EpisodeState, build_graph
+from book_teller.episode import RETRY, Cost, EpisodeState, picture, run_episode
 from book_teller.model_call import ModelCallError, Reason
 from book_teller.write_step import INSTRUCTIONS as WRITE_INSTRUCTIONS
 from book_teller.write_step import Script
@@ -19,7 +19,7 @@ NO_WAIT = RETRY._replace(initial_interval=0.0, jitter=False)
 
 def run(ask: FakeAsk) -> EpisodeState:
     """One run of the graph, from the chapter to the last state."""
-    return build_graph(ask, NO_WAIT).invoke({"chapter": CHAPTER})
+    return run_episode(CHAPTER, ask, NO_WAIT)
 
 
 def failure(reason: Reason) -> ModelCallError:
@@ -67,8 +67,12 @@ def test_the_last_state_holds_the_cost_of_both_calls() -> None:
 
     # The second step adds its line. It does not replace the first one's.
     assert state["costs"] == [
-        Cost(step="write", tokens_in=100, tokens_out=50, thinking_tokens=10, seconds=1.5),
-        Cost(step="check", tokens_in=200, tokens_out=80, thinking_tokens=60, seconds=2.5),
+        Cost(
+            step="write", tokens_in=100, tokens_out=50, thinking_tokens=10, seconds=1.5
+        ),
+        Cost(
+            step="check", tokens_in=200, tokens_out=80, thinking_tokens=60, seconds=2.5
+        ),
     ]
 
 
@@ -122,3 +126,11 @@ def test_the_retry_rule_gives_two_tries() -> None:
     # The model call makes up to three requests by itself. Two tries of a
     # node: up to six requests for one step.
     assert RETRY.max_attempts == 2
+
+
+def test_the_picture_of_the_graph_shows_write_and_then_check() -> None:
+    drawn = picture()
+
+    assert "__start__ --> write;" in drawn
+    assert "write --> check;" in drawn
+    assert "check --> __end__;" in drawn
