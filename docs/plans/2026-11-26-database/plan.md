@@ -95,7 +95,7 @@ A fault is proven when `found_in > 0 AND sentence_exists`. It is not stored a se
 | `backend/alembic.ini`, `backend/src/book_teller/migrations/` | New. Alembic's settings and the first migration. The migrations are a part of the app's code, so they are in the image wherever the code is |
 | `backend/src/book_teller/migrate.py` | New. Run the migrations, take them back, and compare the tables with the ORM classes. The start of a container and the tests both use it |
 | `backend/src/book_teller/tell.py` | A new option, `--save`: the run is also written to the database, and its number is printed. Without it, the script touches no database |
-| `backend/Dockerfile` | The migrations go into the image. When the settings of the database are there, the container runs the migrations first and then starts the app. Without them it starts as today |
+| `backend/src/book_teller/start.py`, `backend/Dockerfile` | New: what a container runs at its start. When the settings of the database are there, it runs the migrations first and then starts the app. Without them the app starts as before. If a migration fails, the app does not start. The Dockerfile names this file as its start command |
 | `compose.yaml` | A second service, `db`: PostgreSQL 18, named by its digest, with one volume for its data. It takes no password and listens only on this machine |
 | `azure-pipelines.yml`, `scripts/smoke_test.sh` | The pipeline starts a PostgreSQL before the tests. The smoke test starts the app with its database and asks whether the tables are there |
 | `infra/main.tf`, `infra/tests/cloud.tftest.hcl` | The database server on Azure, one database, its logins, one firewall rule, and the settings that the app gets |

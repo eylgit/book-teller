@@ -1,7 +1,10 @@
-"""The settings of the model call. They come from environment variables.
+"""The settings of the model call and of the database. They come from
+environment variables.
 
-Nothing here is read when the app starts. The settings are read when a model
-is made, so the app runs without them as long as it calls no model.
+Nothing here is read when this file is loaded. The settings of the model are
+read when a model is made, and those of the database when a connection is
+set up. So the app runs without the first as long as it calls no model, and
+without the second as long as it has no database.
 """
 
 import os
@@ -63,4 +66,59 @@ def _number(environment: Mapping[str, str], name: str, default: float) -> float:
     except ValueError:
         raise SettingsError(
             f"The environment variable {name} must be a number, not {value!r}."
+        ) from None
+
+
+@dataclass(frozen=True)
+class DatabaseSettings:
+    """What a connection to the database needs to know. None of it is a secret."""
+
+    # The address of the database server.
+    host: str
+    # The name of the database on that server.
+    name: str
+    # The name of the login. On Azure: the name of the app's managed identity.
+    user: str
+    # False: the local server of Docker Compose, which asks for no password.
+    # True: Azure. A fresh token of Microsoft Entra goes where a password
+    # would go, and the connection is encrypted.
+    azure_login: bool = False
+    port: int = 5432
+
+
+def read_database_settings(
+    environment: Mapping[str, str] | None = None,
+) -> DatabaseSettings:
+    """Read the settings from the environment variables, or from the given ones."""
+    if environment is None:
+        environment = os.environ
+    return DatabaseSettings(
+        host=_needed(environment, "BOOK_TELLER_DATABASE_HOST"),
+        name=_needed(environment, "BOOK_TELLER_DATABASE_NAME"),
+        user=_needed(environment, "BOOK_TELLER_DATABASE_USER"),
+        azure_login=_azure_login(environment, "BOOK_TELLER_DATABASE_LOGIN"),
+        port=_whole_number(
+            environment, "BOOK_TELLER_DATABASE_PORT", DatabaseSettings.port
+        ),
+    )
+
+
+def _azure_login(environment: Mapping[str, str], name: str) -> bool:
+    value = environment.get(name, "").strip() or "none"
+    if value not in ("none", "azure"):
+        raise SettingsError(
+            f"The environment variable {name} must be none or azure, not {value!r}."
+        )
+    return value == "azure"
+
+
+def _whole_number(environment: Mapping[str, str], name: str, default: int) -> int:
+    value = environment.get(name, "").strip()
+    if not value:
+        return default
+    try:
+        return int(value)
+    except ValueError:
+        raise SettingsError(
+            f"The environment variable {name} must be a whole number, not {value!r}."
         ) from None
