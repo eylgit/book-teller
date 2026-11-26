@@ -46,8 +46,12 @@ services:
       # "docker compose down --volumes" throws them away.
       - db-data:/var/lib/postgresql
     healthcheck:
-      # Asks the server every two seconds whether it takes connections.
-      test: ["CMD", "pg_isready", "--username", "postgres", "--dbname", "book_teller"]
+      # Asks the server every two seconds whether it takes connections over
+      # the network ("--host"), as the app and the tests reach it. Without
+      # "--host" the question goes another way, which answers "yes" too early
+      # at the very first start: the image then runs a short set-up server
+      # that the network cannot reach yet.
+      test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "postgres", "--dbname", "book_teller"]
       interval: 2s
       timeout: 2s
       retries: 30

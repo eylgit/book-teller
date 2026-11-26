@@ -1,6 +1,6 @@
 # Task 8: the database
 
-**State:** planned on 2026-11-26. The maintainer said yes to the plan on the same day, with the five answers below. Nothing is built yet.
+**State:** planned on 2026-11-26. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, the database server on Azure is made, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Not merged yet, so the app on Azure has not used its database.
 
 It is the eighth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -137,7 +137,7 @@ On 2026-11-26. Every question was answered as the agent had proposed. Questions 
 4. The maintainer made one real run with `tell.py --save`, read its rows with plain SQL, and saw the SQL that the ORM wrote for one query.
 5. The migration can be taken back: after `downgrade`, the two tables are gone.
 6. On Azure: `terraform apply` made the server, and a second `terraform plan` says "No changes".
-7. After the merge, the deployed app ran the migration, logged in as its managed identity. The maintainer saw it in the log of the app, and saw the tables.
+7. After the merge, the deployed app ran the migration, logged in as its managed identity. The maintainer saw the line "The migrations ran" in the log of the app. The tables themselves are not looked at: the firewall lets only Azure's own services in, not the maintainer's machine.
 8. The login with a password is off on the server.
 9. The image alone, with no setting of a database, still starts: part 1 of the smoke test.
 10. No password, no token, no address of the server and no login name of a person is in the repository.
@@ -164,13 +164,13 @@ In `backend/tests/test_runs.py`:
 9. The status can be set to `writing` and to `checking`.
 10. A saved result can be read back as it went in: the sentences of the script in order, each fault in the checker's order with the guard's answer, the sums of the tokens and the seconds. The status is `done`, and `finished_at` is set. Curly quote marks and letters with accents come back unchanged.
 11. A result with no fault is saved and read back with an empty list.
-12. A failed run has the status `failed` and its reason. What the steps before the failure cost is kept.
+12. A failed run has the status `failed` and its reason. The function that saves it takes what the steps before the failure cost. (`tell.py` cannot hand that over: see "What the review changed".)
 13. Reading a run that does not exist gives nothing, not an error.
 
 In `backend/tests/test_database.py`:
 
 14. A missing setting gives an error that names its environment variable.
-15. Loading the app and its modules opens no connection: the app starts with no setting of a database.
+15. Making the engine opens no connection, also with a wrong address. (That the app starts with no setting of a database is held by part 1 of the smoke test.)
 16. With the Azure login, the token function is asked once for each new connection, and its token is what goes out as the password. The token is asked for the audience of Azure's PostgreSQL service.
 17. With the local login, no token is asked.
 
@@ -186,8 +186,8 @@ In `infra/tests/cloud.tftest.hcl`, run by `terraform test`:
 
 20. The login with a password is off, and the login with Microsoft Entra is on.
 21. The server is the smallest size, with 32 GB, PostgreSQL 18, in UK South.
-22. There is exactly one firewall rule, the one for Azure services.
-23. The administrators are the app's identity and the maintainer, and nobody else. (As question 3 is answered.)
+22. The firewall rule is the one for Azure services. A test of Terraform cannot count: it cannot show that no second rule exists.
+23. The two administrators are the app's identity and the maintainer. For the same reason, the test cannot show that there is no third.
 24. The app gets the settings of the database, and still holds no secret.
 
 In `scripts/smoke_test.sh`:
@@ -223,7 +223,7 @@ Seen once by the maintainer: exit criteria 3, 4, 6 and 7.
 
 ## What was seen
 
-On the maintainer's machine, on 2026-11-26. Nothing on Azure yet.
+On 2026-11-26. First on the maintainer's machine; the part on Azure is at the end.
 
 **The tables.** `docker compose up` started the database and the app, and the app's container ran the migration at its start: `runs`, `faults` and `alembic_version` were there.
 
@@ -241,6 +241,23 @@ The row of the run, read with plain SQL: status `done`, 10,332 tokens in, 3,092 
 **The volume line.** After `docker compose down` and a new start, the run was still there.
 
 **The smoke test** passed, with its new line: the migrations made the three tables on an empty database.
+
+**On Azure.** The first plan listed five things to add and two to change. The second change was not expected: Terraform wanted to remove a label (a tag) from the registry, which had been added by hand in the portal and was not in `main.tf`. The maintainer chose to keep the label, so it is written into the file now. Then: a saved plan with five to add and one to change, the apply of that plan, and a new plan that says "No changes". Nothing has logged in to that database yet: the first deploy after the merge does.
+
+## What the review changed
+
+A second agent reviewed the change in a fresh session. It read every changed file, ran the tests that need no database and the checks, and tried four small changes of the code on a copy; no test noticed them. It could reach no database, no Docker and no Azure. The maintainer decided on each finding.
+
+- **The health check of the local database could say "healthy" too early,** at the very first start, before the server listens on the network. Then the tests or the smoke test in the pipeline could fail by chance. The check now asks over the network.
+- **No test held the join between the setting "the login is azure" and the token.** The reviewer broke it on a copy, and every test passed. Two tests hold it now.
+- **A failed run that `tell.py --save` saves has a cost of 0,** also when the writer had answered: the graph hands nothing back when a step fails for good. **Left so, and said** in the code. The worker of task 9 saves a run step by step.
+- **The maintainer cannot look into the database on Azure:** the firewall lets only Azure's services in. Exit criterion 7 said "saw the tables"; it now names the line in the log of the app.
+- **Sentences that were stale or promised too much:** "nothing is built yet", "exactly one firewall rule", "nobody else", and "the two cannot drift apart" for the tables and their classes. Corrected.
+- **Two functions had the name `azure_login`,** one for the model and one for the database. The new one is `azure_database_login`.
+- **Kept, though nothing runs them yet:** `alembic.ini`, the template for a new migration, and the second way through `migrations/env.py`. They are for the command `alembic`, which the second migration will need.
+- **Left as it is:** with `--save` against Azure, a login that fails ends in the long words of the library, not in one line.
+- **The connection to Azure is encrypted, and the server's certificate is not checked** (`sslmode=require`). The stricter setting, `verify-full`, is what Microsoft's pages advise. **Left so, and said** in the code (the maintainer). The ready-built driver does not find the certificates of the system by itself, by the reports of other projects, so the stricter setting needs one more library and a try against the real server.
+- **Not taken, because neither mistake has happened:** a limit of 10 seconds for opening a connection (a firewall that is closed shows only after about two minutes, the limit of the driver) · a check in the smoke test that the migration files are inside the image (Docker Compose runs the code of the folder, not of the image; the Dockerfile copies the whole folder of code). If the first deploy hangs: wait two minutes, then read the log of the app.
 
 ## How it is undone
 

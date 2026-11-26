@@ -1,7 +1,7 @@
 """The first migration: the tables runs and faults.
 
-Written as plain SQL. The classes in tables.py say the same, and a test
-compares the two.
+Written as plain SQL. The classes in tables.py say the same. A test compares
+the two, apart from the defaults and the CHECKs.
 
 A migration is history: once it ran on a real database, it is never changed.
 A later change of the tables is a new file.

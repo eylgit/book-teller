@@ -33,12 +33,14 @@ from book_teller.settings import (
 TOKEN_AUDIENCE = "https://ossrdbms-aad.database.windows.net/.default"
 
 
-def azure_login() -> Callable[[], str]:
+def azure_database_login() -> Callable[[], str]:
     """A function that fetches a login token for the database from Azure.
 
-    On a developer's machine the login of the Azure CLI is used. In the cloud
-    it is the managed identity of the app. The library keeps a token until
-    shortly before it dies, so most calls ask nobody.
+    In the cloud it is the managed identity of the app, and the library
+    keeps a token until shortly before it dies, so most calls ask nobody.
+    On a developer's machine it would be the login of the Azure CLI, which
+    is asked every time. The firewall of the server lets only Azure's own
+    services in, so a developer's machine does not get that far today.
     """
     # Loaded here, not at the top: only a real connection to Azure needs it.
     from azure.identity import DefaultAzureCredential
@@ -83,6 +85,9 @@ def make_engine(
     ) -> None:
         parameters["password"] = fetch_token()
         # The token travels over the internet: only on an encrypted connection.
+        # A known limit: "require" encrypts, and does not check that the
+        # server is the one it says it is. The stricter setting is
+        # "verify-full", which Microsoft's pages advise.
         parameters["sslmode"] = "require"
 
     return engine
@@ -94,4 +99,6 @@ def engine_from_environment() -> Engine:
     Raises SettingsError when a setting is missing.
     """
     settings = read_database_settings()
-    return make_engine(settings, azure_login() if settings.azure_login else None)
+    return make_engine(
+        settings, azure_database_login() if settings.azure_login else None
+    )

@@ -50,6 +50,11 @@ def tell(chapter: str, ask: Ask, out: TextIO, engine: Engine | None = None) -> i
     With an engine, the run is also saved in the database. The run is saved
     as "waiting" before any model is asked: a database that cannot be
     reached then stops the run before it costs anything.
+
+    A known limit: a run that fails is saved with a cost of 0, also when
+    the writer had answered before the checker failed. The graph hands
+    nothing back when a step fails for good. And a run that is stopped from
+    outside stays "writing" in the database.
     """
     run_id: int | None = None
     if engine is not None:

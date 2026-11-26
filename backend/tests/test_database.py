@@ -1,12 +1,13 @@
 """Tests of the settings of the database, and of the connection to it.
 
-The first tests need nothing. The last three open a real connection to the
-database of the tests: see conftest.py.
+Most tests need nothing. Those that ask for "test_database" open a real
+connection to the database of the tests: see conftest.py.
 """
 
 import pytest
 from sqlalchemy import Engine, event, text
 
+from book_teller import database
 from book_teller.database import TOKEN_AUDIENCE, make_engine
 from book_teller.settings import (
     DatabaseSettings,
@@ -196,3 +197,58 @@ def test_with_the_local_login_a_token_function_is_never_asked(
         _open_and_close(engine)
     finally:
         engine.dispose()
+
+
+# ---- The engine that the environment variables describe. ----
+# It is what the app and tell.py use. These tests hold the join between the
+# setting "the login is azure" and "a token goes out as the password".
+
+
+def test_the_setting_azure_leads_to_a_token_as_the_password(
+    test_database: None, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_HOST", TEST_DATABASE.host)
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_NAME", TEST_DATABASE.name)
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_USER", TEST_DATABASE.user)
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_LOGIN", "azure")
+    # In the place of the real login to Azure: a token function that asks nobody.
+    monkeypatch.setattr(
+        database, "azure_database_login", lambda: lambda: "a-token-of-azure"
+    )
+
+    engine = database.engine_from_environment()
+    sent: list[dict[str, object]] = []
+
+    @event.listens_for(engine, "do_connect")
+    def look(
+        dialect: object,
+        connection_record: object,
+        arguments: list[object],
+        parameters: dict[str, object],
+    ) -> None:
+        sent.append(dict(parameters))
+        # As above: the local server has no encryption.
+        parameters.pop("sslmode", None)
+
+    try:
+        _open_and_close(engine)
+    finally:
+        engine.dispose()
+
+    assert [each["password"] for each in sent] == ["a-token-of-azure"]
+
+
+def test_without_the_setting_azure_nobody_logs_in_to_azure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def no_login() -> None:
+        raise AssertionError("the local login must not ask Azure")
+
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_HOST", "db.example.invalid")
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_NAME", "book_teller")
+    monkeypatch.setenv("BOOK_TELLER_DATABASE_USER", "postgres")
+    monkeypatch.delenv("BOOK_TELLER_DATABASE_LOGIN", raising=False)
+    monkeypatch.setattr(database, "azure_database_login", no_login)
+
+    # Making the engine opens no connection, so no database is needed.
+    database.engine_from_environment().dispose()

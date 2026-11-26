@@ -10,8 +10,9 @@ words of this file:
 - server_default: the database fills the value in, like DEFAULT in SQL.
 
 These classes do not make the tables. The migrations do, in the folder
-"migrations", as plain SQL. A test compares the two, so that they cannot
-drift apart.
+"migrations", as plain SQL. A test compares the two: tables, columns, types,
+NULL or NOT NULL, and keys. It does not see a default or a CHECK. The lists
+of the two CHECKs are held by tests of their own; a default is not.
 """
 
 from datetime import datetime
