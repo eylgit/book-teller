@@ -92,7 +92,8 @@ A fault is proven when `found_in > 0 AND sentence_exists`. It is not stored a se
 | `backend/src/book_teller/database.py` | New. It makes the connection to the database, from the settings. With the Azure login, a fresh token is asked for every new connection and handed over as the password |
 | `backend/src/book_teller/runs.py` | New. A new run · set its status · save the result of a finished run (the script, each fault with the guard's answer, the sums) · mark a run as failed, with the reason · read a run with its faults |
 | `backend/src/book_teller/settings.py` | The settings of the database: host, name of the database, user, and which login |
-| `backend/alembic.ini`, `backend/migrations/` | New. Alembic's settings and the first migration |
+| `backend/alembic.ini`, `backend/src/book_teller/migrations/` | New. Alembic's settings and the first migration. The migrations are a part of the app's code, so they are in the image wherever the code is |
+| `backend/src/book_teller/migrate.py` | New. Run the migrations, take them back, and compare the tables with the ORM classes. The start of a container and the tests both use it |
 | `backend/src/book_teller/tell.py` | A new option, `--save`: the run is also written to the database, and its number is printed. Without it, the script touches no database |
 | `backend/Dockerfile` | The migrations go into the image. When the settings of the database are there, the container runs the migrations first and then starts the app. Without them it starts as today |
 | `compose.yaml` | A second service, `db`: PostgreSQL 18, named by its digest, with one volume for its data. It takes no password and listens only on this machine |
@@ -143,7 +144,9 @@ On 2026-11-26. Every question was answered as the agent had proposed. Questions 
 
 ## Test cases
 
-Run by `pytest`. Cases 1 to 13 need the local database; the others need nothing.
+Run by `pytest`. Cases 1 to 13, 16 to 18 need the local database; the others need nothing. The tests use a database of their own on the local server, `book_teller_test`, and make it when it is not there. So a test run never touches the runs that `tell.py --save` wrote.
+
+When the tests were written, a few cases were added to the list: a second run of the migrations changes nothing · the defaults of a new run · a run does not show the faults of another · writing to a run that does not exist is an error, not a silent loss · a wrong value of a setting is an error.
 
 In `backend/tests/test_migrations.py`:
 

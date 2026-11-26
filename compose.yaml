@@ -1,5 +1,7 @@
-# Starts the app on your own machine:  docker compose up --build
+# Starts the app and its database on your own machine:  docker compose up --build
 # Then open http://localhost:8000
+#
+# Only the database, e.g. for the tests:  docker compose up --detach db
 
 services:
   app:
@@ -11,3 +13,44 @@ services:
       # The folder backend/src of this machine takes the place of the copy in the
       # image, read-only. So a change to the page shows after a reload, with no new build.
       - ./backend/src:/app/src:ro
+    environment:
+      # Where the database is. "db" is the service below: inside Docker
+      # Compose, a service is reached by its name. None of these is a secret.
+      BOOK_TELLER_DATABASE_HOST: db
+      BOOK_TELLER_DATABASE_NAME: book_teller
+      BOOK_TELLER_DATABASE_USER: postgres
+    depends_on:
+      db:
+        # The app starts when the database answers, not when it has only begun.
+        condition: service_healthy
+
+  db:
+    # PostgreSQL 18, named by its tag and by its digest: the tag is for the
+    # reader, and the digest is the one exact image that Docker fetches.
+    # A test, backend/tests/test_build_files.py, fails when the digest is missing.
+    image: postgres:18@sha256:c699303802144847d238196173655dbbecf7a96aeca1565f2b02eb671a1f0b6b
+    environment:
+      # The database that the app uses. The image makes it at the first start.
+      POSTGRES_DB: book_teller
+      # No password: the server lets every connection in ("trust"). That is
+      # right only because nobody but this machine can reach it: see "ports".
+      # So no password of this database exists, also not in this repository.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      # Only this machine can reach the database: for the tests, and for
+      # a look with psql or another client.
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # The rows live in a volume that Docker keeps, named db-data, not in the
+      # container. So they are still there after "docker compose down".
+      # "docker compose down --volumes" throws them away.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      # Asks the server every two seconds whether it takes connections.
+      test: ["CMD", "pg_isready", "--username", "postgres", "--dbname", "book_teller"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+volumes:
+  db-data:

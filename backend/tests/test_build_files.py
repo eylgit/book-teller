@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 
 DOCKERFILE = Path(__file__).parent.parent / "Dockerfile"
+# Docker Compose's file, in the top folder of the repository.
+COMPOSE_FILE = Path(__file__).parent.parent.parent / "compose.yaml"
 
 # A real digest: the name of the method, then 64 characters from 0-9 and a-f.
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
@@ -107,3 +109,49 @@ def test_the_finder_reads_every_way_to_name_an_image() -> None:
         "example.com/two-lines:1",
         "example.com/mount:1",
     ]
+
+
+# ---- compose.yaml: the images that Docker Compose fetches ready-made. ----
+
+
+def images_in_compose(compose: str) -> list[str]:
+    """Gives every image that a file of Docker Compose names.
+
+    An image is named after "image:". A line that starts with "#" is a
+    comment. A service with "build:" and no "image:" names none: its image
+    is made from a Dockerfile.
+    """
+    return re.findall(r"^[ \t]*image:[ \t]*(\S+)", compose, re.MULTILINE)
+
+
+def test_every_image_of_the_compose_file_has_a_digest() -> None:
+    images = images_in_compose(COMPOSE_FILE.read_text())
+
+    assert without_digest(images) == []
+
+
+def test_the_compose_file_names_one_image() -> None:
+    # The test above is worth nothing if the finder sees nothing. The one
+    # image is the database.
+    images = images_in_compose(COMPOSE_FILE.read_text())
+
+    assert len(images) == 1, images
+    assert images[0].startswith("postgres:")
+
+
+def test_the_finder_of_the_compose_file_catches_a_tag_alone() -> None:
+    good = "postgres:18@sha256:" + "a" * 64
+    compose = f"""
+        services:
+          app:
+            build: ./backend
+          db:
+            image: {good}
+          cache:
+            image:   example.com/cache:7
+          # image: example.com/only-a-comment:1
+    """
+    images = images_in_compose(compose)
+
+    assert images == [good, "example.com/cache:7"]
+    assert without_digest(images) == ["example.com/cache:7"]

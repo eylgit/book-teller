@@ -1,16 +1,20 @@
 """Tests of the script that runs the steps of an episode by hand. No real call."""
 
 import io
+import re
 from pathlib import Path
 
 import pytest
+from sqlalchemy import Engine
 
 from book_teller.check_step import Flag, Flags, Kind
 from book_teller.model_call import ModelCallError, Reason, make_model
+from book_teller.runs import SavedRun, read_run
 from book_teller.settings import ModelSettings
+from book_teller.tables import Status
 from book_teller.tell import ask_with, main, tell
 from book_teller.write_step import Script
-from fake_ask import FLAGS, FakeAsk
+from fake_ask import FLAGS, SCRIPT, FakeAsk
 from fake_model_service import FakeModelService, text_answer
 
 CHAPTER = "Habit is a second nature.\n\nIn most cases people mean a bad habit."
@@ -128,3 +132,80 @@ def test_a_chapter_file_that_is_not_there_is_named_in_one_line(
 def test_without_a_file_and_without_picture_the_script_stops() -> None:
     with pytest.raises(SystemExit):
         main([])
+
+
+# ---- With "--save": the run is also written to the database. ----
+# These tests need the database of the tests: see conftest.py. The tests
+# above hand in no engine, so they show that a run without "--save" never
+# asks a database.
+
+
+def _the_saved_run(printed: str, engine: Engine) -> SavedRun:
+    """The run whose number the script printed, read from the database."""
+    line = re.search(r"^THE RUN: saved as run (\d+)$", printed, re.MULTILINE)
+    assert line is not None, printed
+    run = read_run(engine, int(line.group(1)))
+    assert run is not None
+    return run
+
+
+def test_with_an_engine_the_run_is_saved_and_its_number_is_printed(
+    database: Engine,
+) -> None:
+    out = io.StringIO()
+
+    assert tell(CHAPTER, FakeAsk(), out, engine=database) == 0
+
+    printed = out.getvalue()
+    # What is printed without an engine is still printed.
+    assert "[S2] Habits can be good." in printed
+    run = _the_saved_run(printed, database)
+    assert run.status is Status.DONE
+    assert run.chapter == CHAPTER
+    assert run.script == SCRIPT.sentences
+    # The one flag of the fake checker, with the answer of the guard.
+    [fault] = run.faults
+    assert fault.quote == "in most cases"
+    assert fault.found_in == 2
+    assert fault.proven
+    # The sums of the two fake calls.
+    assert (run.tokens_in, run.tokens_out, run.thinking_tokens) == (300, 130, 70)
+
+
+def test_with_an_engine_a_run_that_fails_is_saved_as_failed(database: Engine) -> None:
+    out = io.StringIO()
+    ask = FakeAsk(
+        fail_always={Flags: ModelCallError(Reason.NO_PERMISSION, "status 403")}
+    )
+
+    assert tell(CHAPTER, ask, out, engine=database) == 1
+
+    printed = out.getvalue()
+    assert "FAILED: no permission: status 403" in printed
+    run = _the_saved_run(printed, database)
+    assert run.status is Status.FAILED
+    # The reason alone, not the long words of the library.
+    assert run.failure == "no permission"
+    assert run.script is None
+    assert run.faults == []
+
+
+def test_with_save_and_without_the_settings_of_the_database_nothing_is_asked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    chapter = tmp_path / "chapter.txt"
+    chapter.write_text(CHAPTER, encoding="utf-8")
+    monkeypatch.setenv("BOOK_TELLER_MODEL_ENDPOINT", "https://example.invalid/")
+    monkeypatch.setenv("BOOK_TELLER_MODEL_DEPLOYMENT", "my-deployment")
+    monkeypatch.delenv("BOOK_TELLER_DATABASE_HOST", raising=False)
+
+    # It ends before any model is asked: a paid run that cannot be saved
+    # would be money for nothing.
+    assert main(["--save", str(chapter)]) == 1
+
+    printed = capsys.readouterr().out
+    assert printed.startswith("ERROR: ")
+    assert "BOOK_TELLER_DATABASE_HOST" in printed
+    assert len(printed.splitlines()) == 1
