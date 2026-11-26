@@ -221,6 +221,27 @@ Seen once by the maintainer: exit criteria 3, 4, 6 and 7.
 - **The start gets slower,** or fails when the database is down, though no page needs the database yet.
 - **The agent cannot reach a database or Azure.** The maintainer runs the tests of cases 1 to 13, the apply and the real run, and the agent reads the output.
 
+## What was seen
+
+On the maintainer's machine, on 2026-11-26. Nothing on Azure yet.
+
+**The tables.** `docker compose up` started the database and the app, and the app's container ran the migration at its start: `runs`, `faults` and `alembic_version` were there.
+
+**One real run with `tell.py --save`,** with the chapter of the probe. It was saved as run 1.
+
+| Step | Tokens in | Tokens out | Of them thinking | Seconds |
+|---|---|---|---|---|
+| `write` | 4,069 | 2,146 | 512 | 21.3 |
+| `check` | 6,263 | 946 | 896 | 8.5 |
+
+The row of the run, read with plain SQL: status `done`, 10,332 tokens in, 3,092 out, 1,408 of them thinking, 29.9 seconds, 86 sentences in the `jsonb` list. The checker flagged nothing, so `faults` has no row of a real run yet; the tests hold that table.
+
+**The SQL of the ORM.** With SQLAlchemy's log switched on, reading run 1 sent two statements: one `SELECT` on `runs` by its id, and one on `faults` by `run_id`, ordered by `position`.
+
+**The volume line.** After `docker compose down` and a new start, the run was still there.
+
+**The smoke test** passed, with its new line: the migrations made the three tables on an empty database.
+
 ## How it is undone
 
 Take the new files and the option `--save` out, and the `db` service out of `compose.yaml`. Take the server out of `main.tf` and apply: Azure deletes the server and its data, and the cost ends. Only test runs are lost.
