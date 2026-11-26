@@ -1,6 +1,6 @@
 # Task 6: the guard
 
-**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, and one real run is made: see "What was seen". A second agent has reviewed the change: see "What the review changed". The pull request is open and its run passes. The planted fault was left out (the maintainer). Still to come: the maintainer reads `guard.py` line by line, and the merge.
+**State:** planned on 2026-11-25. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, and one real run is made: see "What was seen". A second agent has reviewed the change: see "What the review changed". The planted fault was left out (the maintainer). Merged on 2026-11-25, by pull request 9. Of the exit criteria, number 3 is met only in an empty way (the real run gave no flag), and number 4 was taken out with the planted fault. A second, small pull request followed the merge, with this final state.
 
 It is the sixth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
