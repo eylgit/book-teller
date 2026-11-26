@@ -73,7 +73,7 @@ The order is by risk. The cloud is the risky part, so the ship path comes first,
 | 4 | The model call: structured output, the thinking setting, a timeout, a fake model for the tests |
 | 5 | The graph of two steps: write, then check |
 | 6 | The guard: the shape check and the quote check, and what happens when the guard says no |
-| 7 | Streaming: one answer sent piece by piece, in a small script |
+| 7 | ~~Streaming: one answer sent piece by piece, in a small script~~ Left out (the maintainer, 2026-11-26). No part of the product needs it: the two model steps ask for an answer in a fixed shape, and the run happens in the background |
 | 8 | The database: the tables for runs and faults, and the first migration |
 | 9 | The run in the background: the queue, the worker, the progress line, the owner's key |
 | 10 | Tracing: one request ID from the page to the model call |
