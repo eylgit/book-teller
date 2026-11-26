@@ -5,12 +5,15 @@ description = "Turns a book into a podcast series, and checks every script again
 license = "MIT"
 requires-python = ">=3.14"
 dependencies = [
+    "alembic>=1.20.1",
     "azure-identity>=1.27.0",
     "fastapi>=0.163.1",
     "httpx2>=2.16.2",
     "langchain-openai>=1.8.5",
     "langgraph>=1.2.24",
+    "psycopg[binary]>=3.3.9",
     "pydantic>=2.14.3",
+    "sqlalchemy>=2.1.9",
     "uvicorn>=0.54.0",
 ]
 

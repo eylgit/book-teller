@@ -3,7 +3,7 @@
 **This file owns: everything needed to make the project again from nothing, also what is made by hand.**
 What each piece is for, and why it was chosen: the plans in `docs/plans/`.
 
-**Last updated: 2026-11-20** — written from the plans of tasks 2 and 3.
+**Last updated: 2026-11-26** — the database server, and the sign-in name that Terraform needs for it. Before that, 2026-11-20: written from the plans of tasks 2 and 3.
 
 ---
 
@@ -33,12 +33,14 @@ In the folder `infra`:
 
 ```
 export ARM_SUBSCRIPTION_ID="$(az account show --query id --output tsv)"
+export TF_VAR_database_admin_name="$(az ad signed-in-user show --query userPrincipalName --output tsv)"
 terraform init
 terraform plan
 terraform apply
 ```
 
-- `terraform plan` should list 7 things to add. `terraform apply` asks for `yes`, so run it in a terminal where you can type.
+- The second line hands your own sign-in name to Terraform: you become an administrator of the database. The name stays in your shell and in the state file, not in git.
+- `terraform plan` should list 12 things to add. The database server takes several minutes, and it is paid by the hour from then on. `terraform apply` asks for `yes`, so run it in a terminal where you can type.
 - Terraform switches on the families of Azure services that the file uses.
 - **The state file,** `infra/terraform.tfstate`, stays on this machine. `.gitignore` keeps it out of git: it can hold secrets. If it is lost, `terraform import` rebuilds it from what exists in Azure.
 - The app starts with Microsoft's stand-in image. The first merge deploys ours.

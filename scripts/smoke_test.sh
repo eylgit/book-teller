@@ -4,9 +4,10 @@
 #
 #     bash scripts/smoke_test.sh
 #
-# It needs Docker and curl, and the ports 8000 and 8001 must be free: stop
-# your own "docker compose up" first. It ends with "The smoke test passed",
-# or it stops at the first question that fails.
+# It needs Docker and curl, and the ports 8000, 8001 and 5432 must be free:
+# stop your own "docker compose up" first, also when only the database runs.
+# It ends with "The smoke test passed", or it stops at the first question
+# that fails.
 
 # Stop at the first command that fails, and at a name that was never set.
 set -euo pipefail
@@ -17,7 +18,9 @@ cd "$(dirname "$0")/.."
 IMAGE="book-teller:smoke-test"
 CONTAINER="book-teller-smoke-test"
 # Docker Compose under a name of its own. So the clean-up at the end can
-# never take down the app that you started yourself with "docker compose up".
+# never take down the app that you started yourself with "docker compose up",
+# and never throw away the rows of your own database: its volume carries the
+# name of your project, not this one.
 COMPOSE=(docker compose --project-name book-teller-smoke-test)
 PAGE="backend/src/book_teller/static/index.html"
 PAGE_COPY="$(mktemp)"
@@ -27,7 +30,8 @@ cp "$PAGE" "$PAGE_COPY"
 # and the page gets its own text back.
 clean_up() {
     docker rm --force "$CONTAINER" > /dev/null 2>&1 || true
-    "${COMPOSE[@]}" down > /dev/null 2>&1 || true
+    # "--volumes": the database of this test is thrown away with its rows.
+    "${COMPOSE[@]}" down --volumes > /dev/null 2>&1 || true
     cp "$PAGE_COPY" "$PAGE" || true
     rm -f "$PAGE_COPY"
 }
@@ -61,7 +65,7 @@ get() {
     curl --silent --fail --max-time 10 "$1"
 }
 
-echo "== Part 1: the image alone, as the cloud will run it =="
+echo "== Part 1: the image alone, with no database =="
 PART=1
 
 docker build --tag "$IMAGE" backend
@@ -84,11 +88,16 @@ echo "ok: the app does not run as root (user number $user_number)"
 
 docker rm --force "$CONTAINER" > /dev/null
 
-echo "== Part 2: with Docker Compose, the volume line =="
+echo "== Part 2: with Docker Compose: the volume line, and the database =="
 PART=2
 
 if curl --silent --max-time 2 http://127.0.0.1:8000/health > /dev/null; then
     fail "something already answers on port 8000: stop your own app first"
+fi
+# Opens a connection to the port and closes it at once. bash does this
+# itself, through the name /dev/tcp.
+if (exec 3<> /dev/tcp/127.0.0.1/5432) 2> /dev/null; then
+    fail "something already listens on port 5432: stop your own database first"
 fi
 
 "${COMPOSE[@]}" up --build --detach
@@ -101,5 +110,15 @@ page="$(get http://127.0.0.1:8000/)"
 grep --quiet "$word" <<< "$page" \
     || fail "a change to the page on this machine does not show in the app"
 echo "ok: a change to the page on this machine shows in the app"
+
+# The app's container ran the migrations at its start, on a database that
+# was empty. So the tables must be there now. psql, the client of
+# PostgreSQL, is asked inside the container of the database.
+# "-At": only the value, with no frame around it.
+tables="$("${COMPOSE[@]}" exec -T db psql --username postgres --dbname book_teller -At \
+    --command "SELECT string_agg(tablename, ',' ORDER BY tablename) FROM pg_tables WHERE schemaname = 'public'")"
+[ "$tables" = "alembic_version,faults,runs" ] \
+    || fail "the tables of the database are: ${tables:-none}"
+echo "ok: the migrations made the tables $tables"
 
 echo "The smoke test passed."

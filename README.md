@@ -4,7 +4,7 @@ Book Teller turns a book into a podcast series: the book told well by one voice,
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
-**Status:** the skeleton, its pipeline, its cloud, and the call to the model. The app shows one page and answers one health address; it tells no book yet. The code that calls the model exists and is tested, but no page uses it yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
+**Status:** the skeleton, its pipeline, its cloud, the call to the model, the three steps of an episode, and the database. The app shows one page and answers one health address; it tells no book yet. The code that tells a chapter and saves the run exists and is tested, and a script runs it by hand, but no page uses it yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
 
 ## Run it
 
@@ -13,6 +13,8 @@ You need [Docker](https://docs.docker.com/get-docker/).
 ```
 docker compose up --build
 ```
+
+It starts two containers: the app, and a PostgreSQL database beside it. The database takes no password and only your own machine can reach it. At its start the app makes its tables in that database.
 
 Then open <http://localhost:8000>. The address <http://localhost:8000/health> answers `{"status":"ok"}`.
 
@@ -31,9 +33,10 @@ A change to the page, `backend/src/book_teller/static/index.html`, shows after a
 
 ## Run the checks
 
-You need [uv](https://docs.astral.sh/uv/). It installs Python and the libraries at the exact versions of the lockfile, `backend/uv.lock`. Run the commands inside the folder `backend`.
+You need [uv](https://docs.astral.sh/uv/). It installs Python and the libraries at the exact versions of the lockfile, `backend/uv.lock`. Some tests need a real PostgreSQL, so start the database first, from the top folder. Then run the other commands inside the folder `backend`.
 
 ```
+docker compose up --detach db
 cd backend
 uv sync --locked
 uv run pytest
@@ -42,9 +45,9 @@ uv run ruff format --check
 uv run mypy
 ```
 
-The tests need no network. `ruff` is the linter and the formatter; `mypy` is the type checker.
+The tests need no internet, and no test asks a model. The tests of the database use a database of their own on the local server, `book_teller_test`, so they never touch the rows of the app. Without the local server those tests fail; they do not skip. `ruff` is the linter and the formatter; `mypy` is the type checker.
 
-The smoke test needs Docker and curl, and the ports 8000 and 8001 free. It builds the image, starts it, and asks it a few questions: does it answer, and does it run as a user with no special rights? Run it from the top folder:
+The smoke test needs Docker and curl, and the ports 8000, 8001 and 5432 free: stop your own `docker compose up` first, with `docker compose down`. It builds the image, starts it, and asks it a few questions: does it answer, does it run as a user with no special rights, and did it make its tables in an empty database? Run it from the top folder:
 
 ```
 bash scripts/smoke_test.sh
@@ -127,6 +130,31 @@ There are two checks:
 
 Why each choice was made: [the plan of that task](docs/plans/2026-11-25-guard/plan.md).
 
+## The database
+
+A run is kept in PostgreSQL, in two tables: `runs` (the chapter, the script, the status, and the sums of the tokens and the seconds) and `faults` (each fault of a run, with what the checker said and what the guard said). No page reads them yet; the script below writes them.
+
+- **The tables are made by migrations:** files that change the tables, kept in git, in [backend/src/book_teller/migrations/versions](backend/src/book_teller/migrations/versions). The first one is plain SQL. [Alembic](https://alembic.sqlalchemy.org/) runs them and keeps in the database which one ran last, so none runs twice.
+- **The code reads and writes through [SQLAlchemy](https://www.sqlalchemy.org/),** which maps each table to a class: [tables.py](backend/src/book_teller/tables.py). Saving and reading a run is one file, [runs.py](backend/src/book_teller/runs.py). A test compares the classes with the tables that the migrations make.
+- **A container runs the migrations at its start,** before the app, when it is given the settings of a database: [start.py](backend/src/book_teller/start.py). If a migration fails, the new version does not start, and on Azure the old one keeps the visits.
+- **No password, anywhere.** The local database asks for none. The server on Azure takes only logins of Microsoft Entra: the app asks Azure for a token, as its managed identity, and sends it where a password would go. See [database.py](backend/src/book_teller/database.py).
+
+**Known limits.** On Azure the app is an administrator of its database, because it changes its own tables; a team would give it a smaller login and run the migrations with a second one. The connection to Azure is encrypted, but the server's certificate is not checked. A failed run is saved with a cost of 0.
+
+**To tell one chapter and save the run,** add `--save` to the command of "The steps of an episode", with the local database running and its three settings in `backend/.env`:
+
+```
+PYTHONPATH=src uv run --env-file .env python -m book_teller.tell --save ../experiments/2026-11-13-probe_planted_faults/chapter.txt
+```
+
+It prints the number of the saved run. To read it with plain SQL:
+
+```
+docker compose exec db psql -U postgres -d book_teller -c "SELECT id, status, tokens_in, tokens_out FROM runs"
+```
+
+Why each choice was made, and what a second agent's review changed: [the plan of that task](docs/plans/2026-11-26-database/plan.md).
+
 ## How a change gets in
 
 Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it: the tests, the three checks and the smoke test, on a fresh machine in Azure Pipelines. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
@@ -137,7 +165,7 @@ The pipeline runs in a private project of Azure DevOps, because Microsoft no lon
 
 ## The cloud
 
-The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password.
+The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password. And a database server, Azure Database for PostgreSQL, in its smallest size: it takes no password either, and its firewall lets only Azure's own services in.
 
 The maintainer runs Terraform from their own machine, with their own Azure login; the pipeline only checks the file. The state file, Terraform's record of what it made, stays on that machine and is never committed: it can hold secrets. Terraform leaves the image of the app to the pipeline.
 

@@ -50,9 +50,19 @@ jobs:
         displayName: Install from the lockfile
         workingDirectory: backend
 
+      # Some tests need a real PostgreSQL. It is the db service of compose.yaml:
+      # the same image, by its digest, as on the maintainer's machine.
+      # "--wait": go on when the database takes connections, not before.
+      - script: docker compose up --detach --wait db
+        displayName: Start the database of the tests
+
       - script: uv run pytest
         displayName: Tests
         workingDirectory: backend
+
+      # The smoke test below starts a database of its own on the same port.
+      - script: docker compose down --volumes
+        displayName: Stop the database of the tests
 
       - script: uv run ruff check
         displayName: Linter

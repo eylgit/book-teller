@@ -40,4 +40,6 @@ ENV PATH="/app/.venv/bin:$PATH" \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "book_teller.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# With the settings of a database: first the migrations, then uvicorn.
+# Without them: uvicorn at once. See src/book_teller/start.py.
+CMD ["python", "-m", "book_teller.start"]
