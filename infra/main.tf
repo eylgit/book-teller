@@ -34,6 +34,7 @@ provider "azurerm" {
   resource_providers_to_register = [
     "Microsoft.App",
     "Microsoft.ContainerRegistry",
+    "Microsoft.DBforPostgreSQL",
     "Microsoft.ManagedIdentity",
     "Microsoft.OperationalInsights",
   ]
@@ -41,6 +42,14 @@ provider "azurerm" {
 
 # Who is logged in, and to which subscription.
 data "azurerm_client_config" "current" {}
+
+# The sign-in name of the maintainer, who becomes an administrator of the
+# database. It comes from the variable TF_VAR_database_admin_name of the
+# shell, so the name of a person is not written in this repository.
+variable "database_admin_name" {
+  type        = string
+  description = "The sign-in name of the person who runs terraform, as Microsoft Entra knows it."
+}
 
 locals {
   # UK South, the region of the model.
@@ -105,6 +114,91 @@ resource "azurerm_role_assignment" "app_pulls_images" {
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
   principal_type       = "ServicePrincipal"
+}
+
+# The database server: PostgreSQL, run by Azure. Azure installs it, updates
+# it and backs it up. It is paid by the hour, used or not, so it is the
+# smallest size with the smallest disk.
+resource "azurerm_postgresql_flexible_server" "database" {
+  # The name must be unique in all of Azure, like the name of the registry.
+  name                = "psql-book-teller-${local.unique}"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.product.name
+
+  # The same version as the database of compose.yaml.
+  version = "18"
+  # B: burstable, for a server that is idle most of the time. 1 CPU, 2 GB.
+  sku_name   = "B_Standard_B1ms"
+  storage_mb = 32768
+  # The shortest time that Azure offers.
+  backup_retention_days = 7
+
+  # No password exists. The server takes only logins of Microsoft Entra:
+  # a token goes where a password would go.
+  authentication {
+    password_auth_enabled         = false
+    active_directory_auth_enabled = true
+    tenant_id                     = data.azurerm_client_config.current.tenant_id
+  }
+
+  # A public address, guarded by the firewall rule below and by the login.
+  # A private network would start a monthly fee.
+  public_network_access_enabled = true
+
+  lifecycle {
+    # Azure picks the zone, the building inside the region. Without this
+    # line, a later plan would want to move the server to "no zone".
+    ignore_changes = [zone]
+  }
+}
+
+# The one database of the app, on that server. Deleting it deletes every row:
+# Terraform does that only when this block is taken out of the file.
+resource "azurerm_postgresql_flexible_server_database" "book_teller" {
+  name      = "book_teller"
+  server_id = azurerm_postgresql_flexible_server.database.id
+  charset   = "UTF8"
+  collation = "en_US.utf8"
+}
+
+# The firewall: who may reach the server at all, before any login.
+# In Azure, the range from 0.0.0.0 to 0.0.0.0 does not mean an address. It
+# means "anything that runs inside Azure", also of other customers. The app
+# has no fixed address of its own, so the rule cannot be narrower without a
+# private network. The login is the wall.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "azure_services" {
+  name             = "azure-services"
+  server_id        = azurerm_postgresql_flexible_server.database.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "0.0.0.0"
+}
+
+# The login of the app in the database: its identity, as an administrator.
+# The name of the login is the name of the identity, letter for letter.
+# An administrator may do more than the app needs: it may also drop the
+# database. The app runs its own migrations at its start, so it must be
+# allowed to change tables. A later milestone gives it a smaller login.
+resource "azurerm_postgresql_flexible_server_active_directory_administrator" "app" {
+  server_name         = azurerm_postgresql_flexible_server.database.name
+  resource_group_name = azurerm_resource_group.product.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  object_id           = azurerm_user_assigned_identity.app.principal_id
+  principal_name      = azurerm_user_assigned_identity.app.name
+  principal_type      = "ServicePrincipal"
+}
+
+# The login of the maintainer: the person who runs terraform.
+resource "azurerm_postgresql_flexible_server_active_directory_administrator" "maintainer" {
+  server_name         = azurerm_postgresql_flexible_server.database.name
+  resource_group_name = azurerm_resource_group.product.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  object_id           = data.azurerm_client_config.current.object_id
+  principal_name      = var.database_admin_name
+  principal_type      = "User"
+
+  # One administrator after the other: a server that is busy with one
+  # change can refuse a second one.
+  depends_on = [azurerm_postgresql_flexible_server_active_directory_administrator.app]
 }
 
 # The space where Azure runs the app. No private network: that starts a
@@ -175,6 +269,34 @@ resource "azurerm_container_app" "app" {
       image  = "mcr.microsoft.com/k8se/quickstart:latest"
       cpu    = 0.25
       memory = "0.5Gi"
+
+      # The settings of the database: environment variables of the
+      # container. None is a secret. backend/src/book_teller/settings.py
+      # reads them.
+      env {
+        name  = "BOOK_TELLER_DATABASE_HOST"
+        value = azurerm_postgresql_flexible_server.database.fqdn
+      }
+      env {
+        name  = "BOOK_TELLER_DATABASE_NAME"
+        value = azurerm_postgresql_flexible_server_database.book_teller.name
+      }
+      env {
+        name  = "BOOK_TELLER_DATABASE_USER"
+        value = azurerm_user_assigned_identity.app.name
+      }
+      # "azure": log in with a token of Microsoft Entra, over an encrypted
+      # connection.
+      env {
+        name  = "BOOK_TELLER_DATABASE_LOGIN"
+        value = "azure"
+      }
+      # Azure's library reads this name by itself: for which identity it
+      # asks a token. An id, not a secret.
+      env {
+        name  = "AZURE_CLIENT_ID"
+        value = azurerm_user_assigned_identity.app.client_id
+      }
     }
   }
 
@@ -184,8 +306,14 @@ resource "azurerm_container_app" "app" {
     ignore_changes = [template[0].container[0].image]
   }
 
-  # The right to pull must exist before the app first starts.
-  depends_on = [azurerm_role_assignment.app_pulls_images]
+  # The right to pull must exist before the app first starts. So must its
+  # login in the database, and the way through the firewall: the app runs
+  # the migrations at its start.
+  depends_on = [
+    azurerm_role_assignment.app_pulls_images,
+    azurerm_postgresql_flexible_server_active_directory_administrator.app,
+    azurerm_postgresql_flexible_server_firewall_rule.azure_services,
+  ]
 }
 
 # The public address of the app, printed after "terraform apply".
