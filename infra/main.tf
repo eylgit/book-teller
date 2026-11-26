@@ -86,6 +86,13 @@ resource "azurerm_container_registry" "images" {
   resource_group_name = azurerm_resource_group.product.name
   sku                 = "Basic"
 
+  # A label, shown in the Azure portal. Nothing reads it. It was first added
+  # by hand in the portal, and a plan then wanted to remove it: Terraform
+  # removes what this file does not have. So it is written here.
+  tags = {
+    description = "the container registry of book teller"
+  }
+
   # The admin user is one name and password for the whole registry.
   # Off: no password exists. The app pulls with its identity instead.
   admin_enabled = false

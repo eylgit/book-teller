@@ -119,6 +119,13 @@ run "the_cloud_as_written" {
     error_message = "Nobody may pull an image from the registry without a login."
   }
 
+  # The label of the registry, as it is in Azure. Without it in the file,
+  # every plan wants to remove it.
+  assert {
+    condition     = azurerm_container_registry.images.tags == tomap({ description = "the container registry of book teller" })
+    error_message = "The registry must keep its label, the tag description."
+  }
+
   # 4. The app runs as its own identity, and pulls images as that identity.
   assert {
     condition     = azurerm_container_app.app.identity[0].type == "UserAssigned"
