@@ -22,10 +22,11 @@ from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
 from book_teller.check_step import Flag, Flags, Kind
-from book_teller.main import make_app
+from book_teller.database import make_engine
+from book_teller.main import make_app, same_key
 from book_teller.model_call import ModelCallError, Reason
 from book_teller.runs import new_run, read_run
-from book_teller.settings import RunSettings
+from book_teller.settings import DatabaseSettings, RunSettings
 from book_teller.tables import Status
 from fake_ask import FLAGS, SCRIPT, FakeAsk
 
@@ -187,6 +188,16 @@ def test_an_app_with_no_key_set_up_starts_no_run_whatever_is_sent(
     assert response.status_code == 503
     assert count_of_runs(database) == 0
     assert ask.asked == []
+
+
+def test_two_keys_are_the_same_only_when_every_letter_is() -> None:
+    assert same_key(KEY, KEY)
+    assert not same_key(KEY + "x", KEY)
+    assert not same_key(KEY[:-1], KEY)
+    assert not same_key("", KEY)
+    # A letter outside ASCII is compared too, and is no error.
+    assert same_key("clé", "clé")
+    assert not same_key("clé", "cle")
 
 
 def test_reading_a_run_needs_the_key_too(database: Engine) -> None:
@@ -392,6 +403,28 @@ def test_without_the_settings_of_the_database_the_app_says_so(
 
     assert started.status_code == 503
     assert read.status_code == 503
+    assert ask.asked == []
+
+
+def test_a_database_that_cannot_be_reached_is_a_503_without_its_address() -> None:
+    # An address that does not exist. Making the engine opens no connection;
+    # the first statement fails.
+    nowhere = make_engine(
+        DatabaseSettings(host="no-such-host.invalid", name="x", user="y")
+    )
+    ask = FakeAsk()
+    client = TestClient(make_app(settings=SETTINGS, engine=nowhere, ask=ask))
+
+    try:
+        started = client.post("/runs", json={"chapter": CHAPTER}, headers=RIGHT_KEY)
+        read = client.get("/runs/1", headers=RIGHT_KEY)
+    finally:
+        nowhere.dispose()
+
+    for response in (started, read):
+        assert response.status_code == 503
+        # The words of the library hold the address. They stay inside.
+        assert "no-such-host" not in response.text
     assert ask.asked == []
 
 

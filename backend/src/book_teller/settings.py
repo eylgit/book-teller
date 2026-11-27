@@ -1,5 +1,5 @@
-"""The settings of the model call and of the database. They come from
-environment variables.
+"""The settings of the model call, of the database and of a run. They come
+from environment variables.
 
 Nothing here is read when this file is loaded. The settings of the model are
 read when a model is made, and those of the database when a connection is
@@ -9,7 +9,7 @@ without the second as long as it has no database.
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 class SettingsError(Exception):
@@ -122,3 +122,34 @@ def _whole_number(environment: Mapping[str, str], name: str, default: int) -> in
         raise SettingsError(
             f"The environment variable {name} must be a whole number, not {value!r}."
         ) from None
+
+
+@dataclass(frozen=True)
+class RunSettings:
+    """Who may start a run, and how many runs a day may start."""
+
+    # The owner's key: a long random text that stands in for a login. Only a
+    # request that sends it may start a run or read one. None: no key is set
+    # up, and then nobody may. It is the one secret among the settings.
+    # "repr=False": printing the settings does not show the key.
+    owner_key: str | None = field(default=None, repr=False)
+    # The cap of the day: so many runs may start on one day of the clock UTC.
+    runs_a_day: int = 20
+
+
+def read_run_settings(environment: Mapping[str, str] | None = None) -> RunSettings:
+    """Read the settings from the environment variables, or from the given ones."""
+    if environment is None:
+        environment = os.environ
+    name = "BOOK_TELLER_RUNS_A_DAY"
+    runs_a_day = _whole_number(environment, name, RunSettings.runs_a_day)
+    if runs_a_day < 0:
+        raise SettingsError(
+            f"The environment variable {name} must be 0 or more, not {runs_a_day}."
+        )
+    return RunSettings(
+        # A key of only spaces is no key. An empty key would be "right" for
+        # a request that sends an empty key.
+        owner_key=environment.get("BOOK_TELLER_OWNER_KEY", "").strip() or None,
+        runs_a_day=runs_a_day,
+    )

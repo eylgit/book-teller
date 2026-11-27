@@ -14,7 +14,258 @@
   <main class="container py-5">
     <h1>Book Teller</h1>
     <p class="lead">A book, told well by one voice, and every script checked against the book.</p>
-    <p class="text-secondary">Nothing can be told yet. Soon you can paste a chapter here and get a checked script.</p>
+    <p class="text-secondary">Paste one chapter of a book that is free of copyright. The app writes a script that tells it, and then checks the script against the chapter. Only the owner can start a run and read it. The first answer can take a few seconds: the app sleeps when nobody visits.</p>
+
+    <!-- The owner's key. Shown when the browser holds no key. -->
+    <div id="key-form" class="mb-3">
+      <label for="key" class="form-label">The owner's key</label>
+      <input id="key" type="password" class="form-control" autocomplete="off">
+      <div class="form-text">This browser keeps the key for two days.</div>
+    </div>
+    <!-- Shown when the browser holds a key. -->
+    <p id="key-kept" class="text-secondary" hidden>
+      <span id="key-until"></span>
+      <button id="forget-key" type="button" class="btn btn-sm btn-outline-secondary ms-2">Forget the key</button>
+    </p>
+
+    <div class="mb-3">
+      <label for="chapter" class="form-label">The chapter</label>
+      <textarea id="chapter" class="form-control" rows="10"></textarea>
+      <div class="form-text">At most 5,000 words.</div>
+    </div>
+    <button id="tell" type="button" class="btn btn-primary">Tell</button>
+
+    <!-- What went wrong, in the words of the app. -->
+    <div id="problem" class="alert alert-warning mt-4" role="alert" hidden></div>
+
+    <!-- The progress line. -->
+    <p id="progress" class="mt-4 fw-semibold" role="status" hidden></p>
+
+    <!-- The result of a run that is done. The script of the page fills it in. -->
+    <section id="result" class="mt-4" hidden>
+      <h2 class="h4">The script</h2>
+      <ol id="script"></ol>
+      <h2 id="faults-title" class="h4 mt-4"></h2>
+      <ul id="faults" class="list-unstyled"></ul>
+      <p id="sums" class="text-secondary"></p>
+    </section>
   </main>
+
+  <script>
+  // The script of the page. It is inside the page, so the page loads no
+  // second file. Every text that comes from the app is put into the page
+  // with "textContent", which shows it as plain text. A text of the model
+  // can never become HTML here.
+  (function () {
+    "use strict";
+
+    // Where the browser keeps the key and the number of the last run:
+    // "localStorage", a small store that a browser gives each site.
+    var KEY_NAME = "book-teller-owner-key";
+    var RUN_NAME = "book-teller-last-run";
+    var TWO_DAYS = 2 * 24 * 60 * 60 * 1000;
+    var ASK_EVERY = 2000;
+
+    var WORDS = {
+      waiting: "Waiting to start…",
+      writing: "Step 1 of 2: the writer tells the chapter…",
+      checking: "Step 2 of 2: the checker compares the script with the chapter…",
+      done: "Done.",
+      failed: "The run failed"
+    };
+
+    function byId(id) { return document.getElementById(id); }
+
+    var keyForm = byId("key-form");
+    var keyField = byId("key");
+    var keyKept = byId("key-kept");
+    var keyUntil = byId("key-until");
+    var chapterField = byId("chapter");
+    var tellButton = byId("tell");
+    var problem = byId("problem");
+    var progress = byId("progress");
+    var result = byId("result");
+    var timer = null;
+
+    // ---- The key in the browser. ----
+
+    function keptKey() {
+      // The key, or "" when there is none or it is older than two days.
+      try {
+        var kept = JSON.parse(window.localStorage.getItem(KEY_NAME) || "null");
+        if (kept && kept.key && Date.now() - kept.since < TWO_DAYS) { return kept; }
+        window.localStorage.removeItem(KEY_NAME);
+      } catch (error) { /* A browser can refuse the store. Then nothing is kept. */ }
+      return null;
+    }
+
+    function keepKey(key) {
+      try {
+        window.localStorage.setItem(KEY_NAME, JSON.stringify({ key: key, since: Date.now() }));
+      } catch (error) { /* Not kept. The key is typed again next time. */ }
+    }
+
+    function forgetKey() {
+      try {
+        window.localStorage.removeItem(KEY_NAME);
+        window.localStorage.removeItem(RUN_NAME);
+      } catch (error) { /* Nothing was kept. */ }
+      keyField.value = "";
+      showKeyPart();
+    }
+
+    function showKeyPart() {
+      var kept = keptKey();
+      keyForm.hidden = Boolean(kept);
+      keyKept.hidden = !kept;
+      if (kept) {
+        var until = new Date(kept.since + TWO_DAYS);
+        keyUntil.textContent = "This browser keeps the owner's key until " + until.toLocaleString() + ".";
+      }
+    }
+
+    function theKey() {
+      // A key that was just typed wins over the kept one.
+      var typed = keyField.value.trim();
+      if (typed) { return typed; }
+      var kept = keptKey();
+      return kept ? kept.key : "";
+    }
+
+    // ---- Talking to the app. ----
+
+    function show(element, text) {
+      element.textContent = text;
+      element.hidden = false;
+    }
+
+    function stopAsking() {
+      if (timer !== null) { window.clearTimeout(timer); timer = null; }
+      tellButton.disabled = false;
+    }
+
+    function refused(response, body) {
+      // The words of the app for what went wrong.
+      stopAsking();
+      progress.hidden = true;
+      var detail = body && typeof body.detail === "string" ? body.detail : "The app answered " + response.status + ".";
+      show(problem, detail);
+      if (response.status === 401) {
+        // A wrong key is not kept one moment longer.
+        forgetKey();
+        keyField.focus();
+      }
+    }
+
+    function call(method, address, key, body) {
+      var options = { method: method, headers: { "Authorization": "Bearer " + key } };
+      if (body) {
+        options.headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(body);
+      }
+      return fetch(address, options).then(function (response) {
+        return response.json().catch(function () { return null; }).then(function (data) {
+          return { response: response, data: data };
+        });
+      });
+    }
+
+    function tell() {
+      var key = theKey();
+      problem.hidden = true;
+      result.hidden = true;
+      if (!key) { show(problem, "Type the owner's key first."); keyField.focus(); return; }
+      tellButton.disabled = true;
+      show(progress, "Sending the chapter…");
+      call("POST", "/runs", key, { chapter: chapterField.value }).then(function (answer) {
+        if (answer.response.status !== 202) { refused(answer.response, answer.data); return; }
+        // The app took the key, so it is the right one: keep it.
+        if (keyField.value.trim()) { keepKey(key); keyField.value = ""; showKeyPart(); }
+        try { window.localStorage.setItem(RUN_NAME, String(answer.data.id)); } catch (error) { /* Not kept. */ }
+        ask(answer.data.id, key, Date.now());
+      }).catch(function () {
+        stopAsking();
+        progress.hidden = true;
+        show(problem, "The app cannot be reached.");
+      });
+    }
+
+    function ask(runId, key, since) {
+      // "How far?" Asked again every two seconds until the run has ended.
+      call("GET", "/runs/" + runId, key).then(function (answer) {
+        if (answer.response.status !== 200) { refused(answer.response, answer.data); return; }
+        var run = answer.data;
+        var seconds = Math.round((Date.now() - since) / 1000);
+        if (run.status === "done") {
+          stopAsking();
+          show(progress, "Run " + run.id + ": " + WORDS.done);
+          showResult(run);
+        } else if (run.status === "failed") {
+          stopAsking();
+          show(progress, "Run " + run.id + ": " + WORDS.failed + ": " + run.failure + ".");
+        } else {
+          show(progress, "Run " + run.id + ": " + (WORDS[run.status] || run.status) + " " + seconds + " s");
+          timer = window.setTimeout(function () { ask(runId, key, since); }, ASK_EVERY);
+        }
+      }).catch(function () {
+        // One request that got lost does not end the asking.
+        timer = window.setTimeout(function () { ask(runId, key, since); }, ASK_EVERY);
+      });
+    }
+
+    // ---- Showing the result. ----
+
+    function line(tag, text, className) {
+      var element = document.createElement(tag);
+      element.textContent = text;
+      if (className) { element.className = className; }
+      return element;
+    }
+
+    function showResult(run) {
+      var script = byId("script");
+      var faults = byId("faults");
+      script.replaceChildren();
+      faults.replaceChildren();
+      (run.script || []).forEach(function (sentence) {
+        script.appendChild(line("li", sentence));
+      });
+
+      var notProven = run.faults.filter(function (fault) { return !fault.proven; }).length;
+      byId("faults-title").textContent = "The faults that the checker found: " + run.faults.length +
+        ", of them not proven: " + notProven;
+      run.faults.forEach(function (fault) {
+        var item = document.createElement("li");
+        item.className = "mb-3";
+        var where = fault.sentence ? "Sentence " + fault.sentence : "No sentence";
+        item.appendChild(line("div", where + ", " + fault.kind + ": " + fault.reason, "fw-semibold"));
+        if (fault.proven) {
+          // The paragraph of the chapter where plain code found the quote.
+          item.appendChild(line("div", "The book, paragraph " + fault.found_in + ": “" + fault.quote + "”"));
+        } else {
+          item.appendChild(line("div", "The checker's quote, paragraph " + fault.paragraph + ": “" + fault.quote + "”"));
+          item.appendChild(line("div", "NOT PROVEN: " + fault.problems.join(", "), "text-danger"));
+        }
+        faults.appendChild(item);
+      });
+
+      byId("sums").textContent = "Tokens in: " + run.tokens_in + " · tokens out: " + run.tokens_out +
+        ", of them thinking: " + run.thinking_tokens + " · seconds of the model: " + run.model_seconds.toFixed(1);
+      result.hidden = false;
+    }
+
+    // ---- The start of the page. ----
+
+    tellButton.addEventListener("click", tell);
+    byId("forget-key").addEventListener("click", forgetKey);
+    showKeyPart();
+
+    // After a reload: show the last run again, when the key is still kept.
+    var kept = keptKey();
+    var lastRun = null;
+    try { lastRun = window.localStorage.getItem(RUN_NAME); } catch (error) { /* Nothing kept. */ }
+    if (kept && lastRun) { ask(lastRun, kept.key, Date.now()); }
+  })();
+  </script>
 </body>
 </html>
