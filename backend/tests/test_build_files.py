@@ -1,10 +1,15 @@
-"""Tests of the Dockerfile: is every image named by its digest?
+"""Tests of the files that build and ship the app.
 
-A tag, such as "python:3.14-slim", is a name that its owner can move to
-another image. A digest is the fingerprint of one exact image: "@sha256:"
-and 64 characters. With it, every build starts from the same image.
+First: is every image that is fetched named by its digest? A tag, such as
+"python:3.14-slim", is a name that its owner can move to another image. A
+digest is the fingerprint of one exact image: "@sha256:" and 64 characters.
+With it, every build starts from the same image.
 
-These tests only read the file. They need no Docker and no network.
+Last: is the image of the app built in one place, and is that one image
+tested and pushed?
+
+These tests only read files: the Dockerfile, compose.yaml, the pipeline and
+the smoke test. They need no Docker and no network.
 """
 
 import re
@@ -155,3 +160,78 @@ def test_the_finder_of_the_compose_file_catches_a_tag_alone() -> None:
 
     assert images == [good, "example.com/cache:7"]
     assert without_digest(images) == ["example.com/cache:7"]
+
+
+# ---- The image of the app: built once, tested and pushed by its id. ----
+# The pipeline builds the image in a step of its own and reads its id, the
+# fingerprint of its content. The smoke test is handed that id, and after a
+# merge the push step takes the image by that id. So the image that is
+# tested is the image that is deployed.
+
+PIPELINE = Path(__file__).parent.parent.parent / "azure-pipelines.yml"
+SMOKE_TEST = Path(__file__).parent.parent.parent / "scripts" / "smoke_test.sh"
+
+
+def commands_of(script: str) -> str:
+    """A shell script without its comments and without its messages.
+
+    A comment and a message may name a command for the reader. Only the
+    rest is run.
+    """
+    kept = []
+    for line in script.splitlines():
+        words = line.strip()
+        if words.startswith("#") or words.startswith(("fail ", "|| fail ")):
+            continue
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def test_the_smoke_test_does_not_build_the_image_under_test() -> None:
+    commands = commands_of(SMOKE_TEST.read_text())
+
+    # No build by Docker itself, in any of its three spellings. Part 2 of
+    # the script lets Docker Compose build another image, for the app beside
+    # a database; that one is thrown away.
+    for build in ("docker build", "docker buildx", "docker image build"):
+        assert build not in commands
+
+
+def test_the_smoke_test_is_told_which_image_to_test() -> None:
+    commands = commands_of(SMOKE_TEST.read_text())
+
+    # The image is the first word after the name of the script...
+    assert 'IMAGE="${1:-}"' in commands
+    # ...and the script has no image of its own to fall back on.
+    assert "book-teller:" not in commands
+
+
+def test_the_finder_of_commands_drops_comments_and_messages() -> None:
+    script = """
+        # docker build --tag a backend
+        docker run a
+            || fail "build it first: docker build --tag a backend"
+        fail "no image"
+    """
+
+    assert commands_of(script).split() == ["docker", "run", "a"]
+
+
+def test_the_image_that_is_built_is_the_one_that_is_tested_and_pushed() -> None:
+    pipeline = PIPELINE.read_text()
+
+    # One build, from the folder "backend".
+    built = re.findall(r"docker build --tag (\S+) backend", pipeline)
+    assert len(built) == 1
+    # The id of that image is read and handed to the later steps.
+    assert f"docker image inspect --format '{{{{.Id}}}}' {built[0]}" in pipeline
+    assert 'echo "##vso[task.setvariable variable=imageId]$imageId"' in pipeline
+    # The smoke test gets that id, and the push step takes the image by it.
+    assert 'bash scripts/smoke_test.sh "$(imageId)"' in pipeline
+    assert re.findall(r'docker tag (\S+) "\$image"', pipeline) == ['"$(imageId)"']
+    # In that order.
+    assert (
+        pipeline.index("docker build --tag")
+        < pipeline.index("bash scripts/smoke_test.sh")
+        < pipeline.index("docker tag")
+    )
