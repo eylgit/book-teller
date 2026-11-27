@@ -47,11 +47,14 @@ uv run mypy
 
 The tests need no internet, and no test asks a model. The tests of the database use a database of their own on the local server, `book_teller_test`, so they never touch the rows of the app. Without the local server those tests fail; they do not skip. `ruff` is the linter and the formatter; `mypy` is the type checker.
 
-The smoke test needs Docker and curl, and the ports 8000, 8001 and 5432 free: stop your own `docker compose up` first, with `docker compose down`. It builds the image, starts it, and asks it a few questions: does it answer, does it run as a user with no special rights, and did it make its tables in an empty database? Run it from the top folder:
+The smoke test needs Docker and curl, and the ports 8000, 8001 and 5432 free: stop your own `docker compose up` first, with `docker compose down`. It starts the image of the app and asks it a few questions: does it answer, does it run as a user with no special rights, and did it make its tables in an empty database? It does not build the image that it tests: you name the image, and the script prints its id and when it was made. So build the image again after each change. Run both from the top folder:
 
 ```
-bash scripts/smoke_test.sh
+docker build --tag book-teller:candidate backend
+bash scripts/smoke_test.sh book-teller:candidate
 ```
+
+The second part of the script tests the app beside its database. There Docker Compose builds a second image of its own, which is thrown away.
 
 ## The model call
 
@@ -157,11 +160,11 @@ Why each choice was made, and what a second agent's review changed: [the plan of
 
 ## How a change gets in
 
-Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it: the tests, the three checks and the smoke test, on a fresh machine in Azure Pipelines. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
+Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it, on a fresh machine in Azure Pipelines: the tests, the three checks, the build of the image, and the smoke test of that image. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
 
 The pipeline runs in a private project of Azure DevOps, because Microsoft no longer offers public ones. So a visitor sees on each pull request whether the run passed, but cannot open its full log.
 
-**A merge deploys.** After a merge, the same run goes on: it pushes the image that the smoke test checked to the registry, named by the id of the merge commit; it tells the app to run that image; and it asks the live app `/health` until it answers. A run on a pull request skips these steps. The pipeline logs in to Azure with no stored secret (workload identity federation), and its rights reach only the resource group of the app.
+**A merge deploys.** After a merge, a new run does the same steps on `main` and then goes on: it pushes the image that it built and that the smoke test checked, taken by its id (the fingerprint of its content), to the registry, named by the id of the merge commit; it tells the app to run that image; and it asks the live app `/health` until it answers. A run on a pull request skips these steps. The pipeline logs in to Azure with no stored secret (workload identity federation), and its rights reach only the resource group of the app.
 
 ## The cloud
 

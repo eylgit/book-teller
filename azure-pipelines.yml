@@ -76,8 +76,25 @@ jobs:
         displayName: Type checker
         workingDirectory: backend
 
-      # Builds the image, starts it, and asks it a few questions.
-      - script: bash scripts/smoke_test.sh
+      # The image of the app, built once in each run, from backend/Dockerfile.
+      # "candidate": built, and not yet tested.
+      # The step then reads the id of the image: the fingerprint of its
+      # content. A name can be moved to another image; an id cannot. The last
+      # line hands the id to the later steps, as the variable imageId. So the
+      # smoke test checks this image, and after a merge this same image is
+      # pushed and deployed: nothing is built a second time.
+      - script: |
+          set -euo pipefail
+          docker build --tag book-teller:candidate backend
+          imageId="$(docker image inspect --format '{{.Id}}' book-teller:candidate)"
+          echo "The image: $imageId"
+          echo "##vso[task.setvariable variable=imageId]$imageId"
+        displayName: Build the image
+
+      # Starts the image with that id, and asks it a few questions. The
+      # script does not build it. (Its second part lets Docker Compose build
+      # another image, for the app beside a database; that one is thrown away.)
+      - script: bash scripts/smoke_test.sh "$(imageId)"
         displayName: Smoke test of the image
 
       # The build machine has no Terraform of its own. The download is
@@ -117,9 +134,10 @@ jobs:
       # A run on a pull request skips these steps, so a pull request never
       # reaches the cloud. A run started by hand skips them too.
 
-      # The image that the smoke test checked goes to the registry, named by
-      # the id of the merge commit, not "latest": so each running app can be
-      # traced to one commit.
+      # The image that the step "Build the image" made, and that the smoke test
+      # checked, goes to the registry. It is taken by its id, and gets a name
+      # for the registry: the id of the merge commit, not "latest". So each
+      # running app can be traced to one commit.
       - task: AzureCLI@2
         displayName: Push the image to the registry
         condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))
@@ -135,7 +153,7 @@ jobs:
             [ "$(wc -w <<< "$registry")" = "1" ] || { echo "Expected one registry, found: $registry" >&2; exit 1; }
             image="$registry.azurecr.io/book-teller:$(Build.SourceVersion)"
             az acr login --name "$registry"
-            docker tag book-teller:smoke-test "$image"
+            docker tag "$(imageId)" "$image"
             docker push "$image"
             echo "##vso[task.setvariable variable=image]$image"
 
