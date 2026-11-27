@@ -1,6 +1,6 @@
 # Task 9a: the run, without a queue
 
-**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". The app's code is built, the cloud part is applied, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Not merged yet.
+**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". The app's code is built, the cloud part is applied, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Merged on 2026-11-27, by a pull request, and deployed. The maintainer made a real run on the live page, with the key from the vault. All nine exit criteria are met. A second, small pull request followed the merge, with this final state.
 
 It is the first half of task 9 of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md). Task 9 was split on 2026-11-27: this half makes the page work, and task 9b moves the run out of the web app, behind a queue.
 
@@ -219,6 +219,10 @@ On 2026-11-27.
 - Two older checks of the cloud tests were rewritten. "The app holds no secret" became "the app has one secret, with no value, that points to the vault". "Exactly five settings, none from a secret" became "seven plain settings, and one that names the secret".
 
 **On Azure.** The plan listed six things to add and one to change, and nothing to destroy. The apply made them at the first try, and a new plan said "No changes". The app got its new settings while it still ran the code of before this task, which does not read them.
+
+**The narrower role,** after the review: the app's role on the vault was replaced by one on the single secret. The plan listed one thing to add and one to destroy, the apply made them, and a new plan said "No changes".
+
+**After the merge.** The run on `main` deployed the new version, and it started: so Azure fetched the owner's key from the vault as the app's identity, with the role on the one secret. On the live page the maintainer read the key from the vault, and made one real run: the app called the model as its managed identity, saved the run, and the page showed the progress and then the result. No key of the model exists anywhere.
 
 ## What the review changed
 
