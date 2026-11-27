@@ -6,7 +6,7 @@ They need the database of the tests: see conftest.py.
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, text
 
 from book_teller.check_step import Flag, Kind
 from book_teller.episode import Cost
@@ -14,6 +14,7 @@ from book_teller.guard import CheckedFlag, Problem
 from book_teller.runs import (
     NoSuchRun,
     SavedFault,
+    count_started_today,
     mark_failed,
     new_run,
     read_run,
@@ -261,3 +262,55 @@ def test_writing_to_a_run_that_does_not_exist_is_an_error(database: Engine) -> N
         save_result(database, 999, SCRIPT, [PROVEN], COSTS)
     with pytest.raises(NoSuchRun):
         mark_failed(database, 999, "timeout")
+
+
+# ---- The count of the day, for the cap on the runs of one day. ----
+
+# The first moment of this day by the clock UTC, as the database sees it.
+MIDNIGHT_UTC = "date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'"
+
+
+def _move(engine: Engine, run_id: int, moment: str) -> None:
+    """Change the moment at which a run was started. Only a test does this."""
+    with engine.begin() as connection:
+        connection.execute(
+            text(f"UPDATE runs SET created_at = {moment} WHERE id = :id"),
+            {"id": run_id},
+        )
+
+
+def test_the_count_of_the_day_holds_every_run_that_was_started_today(
+    database: Engine,
+) -> None:
+    assert count_started_today(database) == 0
+
+    new_run(database, CHAPTER)
+    running = new_run(database, CHAPTER)
+    set_status(database, running, Status.CHECKING)
+    done = new_run(database, CHAPTER)
+    save_result(database, done, SCRIPT, [PROVEN], COSTS)
+    failed = new_run(database, CHAPTER)
+    mark_failed(database, failed, "timeout")
+
+    # A run that failed counts too: it may have cost money.
+    assert count_started_today(database) == 4
+
+
+def test_the_count_of_the_day_holds_no_run_of_an_earlier_day(
+    database: Engine,
+) -> None:
+    old = new_run(database, CHAPTER)
+    _move(database, old, "now() - interval '25 hours'")
+    new_run(database, CHAPTER)
+
+    assert count_started_today(database) == 1
+
+
+def test_the_day_of_the_count_starts_at_midnight_utc(database: Engine) -> None:
+    # Whatever time zone the server or the connection has.
+    just_before = new_run(database, CHAPTER)
+    _move(database, just_before, f"{MIDNIGHT_UTC} - interval '1 second'")
+    at_midnight = new_run(database, CHAPTER)
+    _move(database, at_midnight, MIDNIGHT_UTC)
+
+    assert count_started_today(database) == 1

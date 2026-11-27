@@ -96,3 +96,39 @@ def test_health_takes_only_get() -> None:
     response = client.post("/health")
 
     assert response.status_code == 405
+
+
+class FormFinder(HTMLParser):
+    """Reads a page and keeps the ids of its fields and buttons, with their types."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.found: dict[str, tuple[str, str | None]] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        name = values.get("id")
+        if name and tag in ("textarea", "input", "button"):
+            self.found[name] = (tag, values.get("type"))
+
+
+def test_the_page_has_the_form_that_starts_a_run() -> None:
+    finder = FormFinder()
+    finder.feed(client.get("/").text)
+
+    # Where the chapter is pasted.
+    assert finder.found["chapter"][0] == "textarea"
+    # The owner's key. "password": the browser shows dots, not the key.
+    assert finder.found["key"] == ("input", "password")
+    assert finder.found["tell"][0] == "button"
+    # The key rests in the browser for two days. This button throws it away.
+    assert finder.found["forget-key"][0] == "button"
+
+
+def test_the_page_never_puts_a_text_into_itself_as_html() -> None:
+    # The script of the page shows texts of the model. As HTML, such a text
+    # could carry a script of its own, and that script could read the key.
+    page = client.get("/").text
+
+    for way in ("innerHTML", "outerHTML", "insertAdjacentHTML", "document.write"):
+        assert way not in page, way
