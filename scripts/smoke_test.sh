@@ -1,8 +1,19 @@
 #!/usr/bin/env bash
-# The smoke test: builds the image, starts it, and asks it a few questions.
-# The pipeline runs it on every pull request. To run it on your own machine:
+# The smoke test: starts one image of the app, and asks it a few questions.
 #
-#     bash scripts/smoke_test.sh
+#     bash scripts/smoke_test.sh IMAGE
+#
+# IMAGE is the image under test, by its name or by its id. The script does
+# not build it: whoever calls the script says which image is meant. In the
+# pipeline, the step "Build the image" builds it and hands its id over. On
+# your own machine, from the top folder of the repository, after each change:
+#
+#     docker build --tag book-teller:candidate backend
+#     bash scripts/smoke_test.sh book-teller:candidate
+#
+# Part 1 tests that image alone. Part 2 tests the app beside its database:
+# there Docker Compose builds a second image of its own, which is thrown
+# away and never pushed.
 #
 # It needs Docker and curl, and the ports 8000, 8001 and 5432 must be free:
 # stop your own "docker compose up" first, also when only the database runs.
@@ -15,7 +26,9 @@ set -euo pipefail
 # Work from the top folder of the repository, wherever the script is called from.
 cd "$(dirname "$0")/.."
 
-IMAGE="book-teller:smoke-test"
+# The image under test: the first word after the name of the script. Empty
+# when none was given; that is checked below.
+IMAGE="${1:-}"
 CONTAINER="book-teller-smoke-test"
 # Docker Compose under a name of its own. So the clean-up at the end can
 # never take down the app that you started yourself with "docker compose up",
@@ -68,7 +81,12 @@ get() {
 echo "== Part 1: the image alone, with no database =="
 PART=1
 
-docker build --tag "$IMAGE" backend
+[ -n "$IMAGE" ] \
+    || fail "name the image to test: bash scripts/smoke_test.sh IMAGE"
+# Prints which image is tested: its id, the fingerprint of its content, and
+# when it was made. An image from last week shows here.
+docker image inspect --format 'The image under test: {{.Id}}, made at {{.Created}}' "$IMAGE" 2> /dev/null \
+    || fail "there is no image $IMAGE on this machine. See the first lines of this script."
 docker run --detach --name "$CONTAINER" --publish 127.0.0.1:8001:8000 "$IMAGE" > /dev/null
 wait_for http://127.0.0.1:8001
 
