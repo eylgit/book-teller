@@ -75,7 +75,8 @@ The order is by risk. The cloud is the risky part, so the ship path comes first,
 | 6 | The guard: the shape check and the quote check, and what happens when the guard says no |
 | 7 | ~~Streaming: one answer sent piece by piece, in a small script~~ Left out (the maintainer, 2026-11-26). No part of the product needs it: the two model steps ask for an answer in a fixed shape, and the run happens in the background |
 | 8 | The database: the tables for runs and faults, and the first migration |
-| 9 | The run in the background: the queue, the worker, the progress line, the owner's key |
+| 9a | The run, without a queue: the routes, the page with its progress line, the owner's key, the limit on the pasted text, the cap of the day. The web app does the run itself. Split from task 9 on 2026-11-27: [its plan](../2026-11-27-run_without_queue/plan.md) |
+| 9b | The queue and the worker: the run moves out of the web app |
 | 10 | Tracing: one request ID from the page to the model call |
 | 11 | The planted-fault test and the four numbers on the page, with their limits said |
 | 12 | The sound: one play button |
