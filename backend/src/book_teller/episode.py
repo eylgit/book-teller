@@ -117,9 +117,9 @@ type OnStep = Callable[[str, EpisodeState], None]
 def build_graph(ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeGraph:
     """Put the graph together: START -> write -> check -> guard -> END.
 
-    run_episode below runs it: "invoke" starts at START with the chapter, and
-    its answer is the last state. A step that fails for good ends the run: its
-    ModelCallError leaves "invoke" as it is.
+    run_episode below runs it, from START with the chapter to the last
+    state. A step that fails for good ends the run: its ModelCallError
+    leaves the graph as it is.
     """
 
     def write(state: EpisodeState) -> EpisodeState:

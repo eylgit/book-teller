@@ -31,7 +31,7 @@
     <div class="mb-3">
       <label for="chapter" class="form-label">The chapter</label>
       <textarea id="chapter" class="form-control" rows="10"></textarea>
-      <div class="form-text">At most 5,000 words.</div>
+      <div class="form-text">At most 5,000 words and 40,000 characters.</div>
     </div>
     <button id="tell" type="button" class="btn btn-primary">Tell</button>
 
@@ -86,11 +86,15 @@
     var progress = byId("progress");
     var result = byId("result");
     var timer = null;
+    // The number of the run that the page asks about now, as a text. An
+    // answer for another run comes too late, and is thrown away.
+    var current = null;
 
     // ---- The key in the browser. ----
 
     function keptKey() {
-      // The key, or "" when there is none or it is older than two days.
+      // The kept key with its date, or null when there is none or it is
+      // older than two days.
       try {
         var kept = JSON.parse(window.localStorage.getItem(KEY_NAME) || "null");
         if (kept && kept.key && Date.now() - kept.since < TWO_DAYS) { return kept; }
@@ -172,6 +176,9 @@
 
     function tell() {
       var key = theKey();
+      // An older run that the page still asks about is let go.
+      stopAsking();
+      current = null;
       problem.hidden = true;
       result.hidden = true;
       if (!key) { show(problem, "Type the owner's key first."); keyField.focus(); return; }
@@ -182,7 +189,7 @@
         // The app took the key, so it is the right one: keep it.
         if (keyField.value.trim()) { keepKey(key); keyField.value = ""; showKeyPart(); }
         try { window.localStorage.setItem(RUN_NAME, String(answer.data.id)); } catch (error) { /* Not kept. */ }
-        ask(answer.data.id, key, Date.now());
+        follow(answer.data.id, key);
       }).catch(function () {
         stopAsking();
         progress.hidden = true;
@@ -190,9 +197,16 @@
       });
     }
 
+    function follow(runId, key) {
+      // From now on the page asks about this run, and about no other.
+      current = String(runId);
+      ask(current, key, Date.now());
+    }
+
     function ask(runId, key, since) {
       // "How far?" Asked again every two seconds until the run has ended.
       call("GET", "/runs/" + runId, key).then(function (answer) {
+        if (runId !== current) { return; }
         if (answer.response.status !== 200) { refused(answer.response, answer.data); return; }
         var run = answer.data;
         var seconds = Math.round((Date.now() - since) / 1000);
@@ -209,6 +223,7 @@
         }
       }).catch(function () {
         // One request that got lost does not end the asking.
+        if (runId !== current) { return; }
         timer = window.setTimeout(function () { ask(runId, key, since); }, ASK_EVERY);
       });
     }
@@ -264,7 +279,7 @@
     var kept = keptKey();
     var lastRun = null;
     try { lastRun = window.localStorage.getItem(RUN_NAME); } catch (error) { /* Nothing kept. */ }
-    if (kept && lastRun) { ask(lastRun, kept.key, Date.now()); }
+    if (kept && lastRun) { follow(lastRun, kept.key); }
   })();
   </script>
 </body>

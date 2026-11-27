@@ -18,12 +18,13 @@ is already done. In the real app the answer leaves first.
 """
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, text
 
 from book_teller.check_step import Flag, Flags, Kind
 from book_teller.database import make_engine
-from book_teller.main import make_app, same_key
+from book_teller.main import check_the_key, make_app, same_key
 from book_teller.model_call import ModelCallError, Reason
 from book_teller.runs import new_run, read_run
 from book_teller.settings import DatabaseSettings, RunSettings
@@ -423,6 +424,7 @@ def test_a_database_that_cannot_be_reached_is_a_503_without_its_address() -> Non
 
     for response in (started, read):
         assert response.status_code == 503
+        assert response.json() == {"detail": "The database gave an error."}
         # The words of the library hold the address. They stay inside.
         assert "no-such-host" not in response.text
     assert ask.asked == []
@@ -499,3 +501,127 @@ def test_a_run_whose_checker_fails_is_read_as_failed_with_its_reason(
     saved = read_run(database, started.json()["id"])
     assert saved is not None
     assert saved.status is Status.FAILED
+
+
+# ---- What the review of this task found. ----
+
+
+@pytest.mark.parametrize("empty", ["", "   "])
+@pytest.mark.parametrize("sent", [None, "Bearer", "Bearer ", "Bearer    "])
+def test_the_check_of_the_key_never_takes_an_empty_key_of_the_app(
+    empty: str, sent: str | None
+) -> None:
+    # read_run_settings turns an empty key into "no key". The check must be
+    # safe without that, too: an empty key is "right" for an empty one.
+    with pytest.raises(HTTPException) as refused:
+        check_the_key(RunSettings(owner_key=empty), sent)
+
+    assert refused.value.status_code == 503
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"chapter": ""},
+        {"chapter": "word " * 5001},
+        {"text": "no chapter at all"},
+        {"chapter": 17},
+    ],
+)
+def test_the_key_is_checked_before_the_body_is_looked_at(
+    database: Engine, body: dict[str, object]
+) -> None:
+    # A stranger learns "401", and nothing about what a good request holds.
+    client = client_for(database, FakeAsk())
+
+    for headers in ({}, WRONG_KEY):
+        response = client.post("/runs", json=body, headers=headers)
+
+        assert response.status_code == 401
+        # FastAPI's own answer to a wrong body repeats the body. Not here.
+        assert "chapter" not in response.text
+
+
+def test_the_key_is_checked_before_the_cap_of_the_day(database: Engine) -> None:
+    client = client_for(database, FakeAsk(), RunSettings(owner_key=KEY, runs_a_day=0))
+
+    response = client.post("/runs", json={"chapter": CHAPTER}, headers=WRONG_KEY)
+
+    # 401, not 429: a stranger does not learn that the cap is reached.
+    assert response.status_code == 401
+
+
+def test_the_key_is_checked_before_the_number_of_the_run_is_looked_at(
+    database: Engine,
+) -> None:
+    client = client_for(database, FakeAsk())
+
+    assert client.get("/runs/seventeen", headers=WRONG_KEY).status_code == 401
+    assert client.get("/runs/seventeen").status_code == 401
+
+
+def test_an_app_with_no_key_set_up_says_so_whatever_the_request_holds(
+    database: Engine,
+) -> None:
+    client = client_for(database, FakeAsk(), RunSettings(owner_key=None))
+
+    assert client.post("/runs", json={"text": "x"}).status_code == 503
+    assert client.get("/runs/seventeen").status_code == 503
+
+
+def test_a_wrong_key_is_not_repeated_in_the_answer(database: Engine) -> None:
+    client = client_for(database, FakeAsk())
+
+    response = client.post("/runs", json={"chapter": CHAPTER}, headers=WRONG_KEY)
+
+    assert "not-the-key" not in response.text
+    assert "not-the-key" not in str(response.headers)
+
+
+def test_a_chapter_with_a_nul_character_starts_no_run(database: Engine) -> None:
+    # PostgreSQL takes this character in no text. Without the check, the
+    # database would raise an error in the middle of the request.
+    ask = FakeAsk()
+    client = client_for(database, ask)
+
+    response = client.post(
+        "/runs", json={"chapter": "A chapter.\x00"}, headers=RIGHT_KEY
+    )
+
+    assert response.status_code == 422
+    assert count_of_runs(database) == 0
+    assert ask.asked == []
+
+
+def test_a_wrong_setting_is_named_in_the_log_and_not_in_the_answer(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # No settings are handed in, so the app reads them from the environment.
+    monkeypatch.setenv("BOOK_TELLER_OWNER_KEY", KEY)
+    monkeypatch.setenv("BOOK_TELLER_RUNS_A_DAY", "twenty")
+    client = TestClient(make_app(ask=FakeAsk()))
+
+    response = client.post("/runs", json={"chapter": CHAPTER}, headers=RIGHT_KEY)
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "The app is not set up."}
+    # Whoever runs the app finds the cause in the log.
+    assert "BOOK_TELLER_RUNS_A_DAY" in caplog.text
+    assert KEY not in caplog.text
+
+
+def test_an_error_of_the_database_leaves_a_line_in_the_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    nowhere = make_engine(
+        DatabaseSettings(host="no-such-host.invalid", name="x", user="y")
+    )
+    client = TestClient(make_app(settings=SETTINGS, engine=nowhere, ask=FakeAsk()))
+
+    try:
+        response = client.get("/runs/1", headers=RIGHT_KEY)
+    finally:
+        nowhere.dispose()
+
+    assert response.status_code == 503
+    assert "The database gave an error" in caplog.text

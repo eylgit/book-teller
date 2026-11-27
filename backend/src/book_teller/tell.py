@@ -55,8 +55,8 @@ def tell(chapter: str, ask: Ask, out: TextIO, engine: Engine | None = None) -> i
     run_id: int | None = None
     if engine is not None:
         run_id = runs.new_run(engine, chapter)
-        # The graph runs in one go, so this script cannot tell the database
-        # when the writer is done and the checker starts.
+        # This script does not tell the database when the writer is done and
+        # the checker starts. The run from the page does: see job.py.
         runs.set_status(engine, run_id, Status.WRITING)
     try:
         state = run_episode(chapter, ask)

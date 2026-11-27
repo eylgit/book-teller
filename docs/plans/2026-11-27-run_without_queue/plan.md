@@ -1,6 +1,6 @@
 # Task 9a: the run, without a queue
 
-**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". The app's code is built, and the cloud part is applied: see "What was seen". Not merged yet: the review by a second agent is next.
+**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". The app's code is built, the cloud part is applied, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Not merged yet.
 
 It is the first half of task 9 of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md). Task 9 was split on 2026-11-27: this half makes the page work, and task 9b moves the run out of the web app, behind a queue.
 
@@ -44,7 +44,7 @@ Steps 5 to 9 happen after answer 4 has left. Step 10 happens many times, beside 
 | Word | What it is |
 |---|---|
 | **Route** | One address of the web app together with one function: a request to that address runs that function. Today the app has two: `/` and `/health` |
-| **Status code** | The number at the start of every HTTP answer that says how it went: 200 is "fine", 404 is "not found". This task uses six more, listed under "The routes" |
+| **Status code** | The number at the start of every HTTP answer that says how it went: 200 is "fine", 404 is "not found". This task uses five more, listed under "The routes" |
 | **Background task** | FastAPI's way to do work after the answer has been sent. The route hands FastAPI a function, the answer leaves, and then FastAPI runs the function, in a thread of the same program |
 | **The owner's key** | A long random text that only the owner knows. It stands in for a login until a later milestone has one. The page sends it with the request, and the app compares it with its own copy |
 | **Azure Key Vault** | Azure's safe for secrets. A secret has a name and a value; who may read it is decided by role assignments, like everything else in this cloud |
@@ -57,13 +57,13 @@ Steps 5 to 9 happen after answer 4 has left. Step 10 happens many times, beside 
 | `POST /runs` | Starts a run. The body is JSON with one field, `chapter`. The key travels in the header `Authorization: Bearer …`, the usual place | **202** "accepted", with the number of the run: the work is not done yet · **401** no key, or a wrong one · **422** the chapter is empty or too long · **429** the cap of the day is reached · **503** the app is not set up: it has no key, no settings of the model, or no database |
 | `GET /runs/{number}` | "How far?" It reads the run from the database. It needs the key too | **200** with the status, and with the script, the faults and the sums when they are there · **401** no key, or a wrong one · **404** no run has this number · **503** the app has no key or no database |
 
-The app checks in this order: is a key set up at all, is the key right, is the chapter within the limit, is the cap free, are the model and the database set up. Only then a row is written.
+The app checks in this order: is a key set up at all, is the key right, is the body of the request well formed, is the chapter within the limit, is the cap free, is the model set up. Only then a row is written. The key comes before everything else of the request, so a stranger learns nothing but 401.
 
 ## The three guards
 
 - **The owner's key.** The app holds its copy in the environment variable `BOOK_TELLER_OWNER_KEY`. The two keys are compared with `secrets.compare_digest`, a function of Python that takes the same time for a right and for a wrong key, so the time of the answer tells an attacker nothing. **With no key set up, every start of a run is refused:** the app never falls open. On Azure the key lives in Key Vault: see "The key on Azure".
 - **The limit on the pasted text.** At most 5,000 words, counted as the pieces between spaces, and at most 40,000 characters, so that one endless "word" cannot pass. The chapter of the probe has 3,190 words and 18,114 characters. It is the cheapest guard: a long text is refused before it costs anything.
-- **The cap of the day.** Before a run starts, the app counts the runs that were started on this day, and refuses the new run when there are 20. Every row counts, also a run that failed: it has cost money too. The day is the day of the clock UTC. The number is a setting, `BOOK_TELLER_RUNS_A_DAY`. A count is simple, and nothing slips past it. It is not money: 20 runs of the size of the probe's chapter cost about 20 to 40 US cents, and a run of the longest text that the limit allows costs more. An Azure budget cannot do this job: it only sends a notice, and its numbers are 8 to 24 hours late.
+- **The cap of the day.** Before a run starts, the app counts the runs that were started on this day, and refuses the new run when there are 20. Every row counts, also a run that failed: it has cost money too. The day is the day of the clock UTC. The number is a setting, `BOOK_TELLER_RUNS_A_DAY`. A count is simple. Two runs that start at the same moment can both pass it. It is not money: 20 runs of the size of the probe's chapter cost about 20 to 40 US cents, and a run of the longest text that the limit allows costs more. An Azure budget cannot do this job: it only sends a notice, and its numbers are 8 to 24 hours late.
 
 ## The key on Azure
 
@@ -219,6 +219,21 @@ On 2026-11-27.
 - Two older checks of the cloud tests were rewritten. "The app holds no secret" became "the app has one secret, with no value, that points to the vault". "Exactly five settings, none from a secret" became "seven plain settings, and one that names the secret".
 
 **On Azure.** The plan listed six things to add and one to change, and nothing to destroy. The apply made them at the first try, and a new plan said "No changes". The app got its new settings while it still ran the code of before this task, which does not read them.
+
+## What the review changed
+
+A second agent reviewed the change in a fresh session. It read every changed file, ran the checks and the tests that need no database, and broke the code in about fifty small ways on a copy, with a stand-in for the database, to see which breakage a test notices. Nine went unnoticed. It found no way to start or read a run without the key, and no way for the key to reach an answer. The maintainer decided on each finding.
+
+- **The check of the key let a request in when the app's own key was an empty text.** The app was safe, because the settings turn an empty key into "no key". The check now refuses by itself, with a test.
+- **FastAPI checked the body of a request before the key.** A stranger who sent a wrong body got 422, with the body repeated, and no test held the order of the guards: the reviewer moved the key check behind the cap, and every test passed. The key check is now a dependency of both routes, which FastAPI calls before it looks at the body, and five tests hold the order. One case is left: a body that is not JSON at all still gets 422 first.
+- **A 503 left no trace.** The two places that answer 503 now write one line into the log. A wrong setting showed its value in the answer; the answer now says only "The app is not set up." The words for a database error were "cannot be reached" for every kind of error; they are "The database gave an error."
+- **A chapter with a NUL character** would have raised an error in the database. It is refused with 422.
+- **The page could ask about two runs at once,** an old one that is stuck and a new one, and the two wrote over each other. The page now asks about one run only.
+- **The app's role on the vault was on the whole vault.** It is on the one secret now (the maintainer). The reason: a second secret comes into the same vault with the tracing, and each right should be given on purpose.
+- **The README's steps for a run on one's own machine made no tables.** One line more.
+- **Sentences that were false or promised too much:** "nothing slips past the cap", "six more status codes", "the app always gets the newest value" of the key, and five more. Corrected.
+- **Left as they are (the maintainer):** three small faults of the page's script, named in the README · `do_run` does not check that a run still waits: the queue of the next task is where a job must be safe to do twice · `tell.py` repeats a part of what `do_run` does.
+- **Tests added with the fixes, not before them.** They need the database, so the maintainer's run was their first.
 
 ## How it is undone
 

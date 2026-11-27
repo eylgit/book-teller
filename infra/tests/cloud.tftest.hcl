@@ -77,6 +77,8 @@ mock_provider "azurerm" {
     defaults = {
       id             = "https://kv-book-teller-test.vault.azure.net/secrets/owner-key/0123456789abcdef0123456789abcdef"
       versionless_id = "https://kv-book-teller-test.vault.azure.net/secrets/owner-key"
+      # The same secret as Azure's own kind of id, which a role can point to.
+      resource_versionless_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.KeyVault/vaults/kv-book-teller-test/secrets/owner-key"
     }
   }
   mock_data "azurerm_client_config" {
@@ -379,6 +381,11 @@ run "the_cloud_as_written" {
     error_message = "The owner's key must have 48 characters."
   }
   assert {
+    # Letters and digits only: the key travels in an HTTP header.
+    condition     = random_password.owner_key.special == false
+    error_message = "The owner's key must hold letters and digits only."
+  }
+  assert {
     condition     = azurerm_key_vault_secret.owner_key.name == "owner-key"
     error_message = "The secret must have the name owner-key."
   }
@@ -387,16 +394,24 @@ run "the_cloud_as_written" {
     error_message = "The owner's key must be in the vault of this file."
   }
 
-  # 18. Two roles on the vault. The app may only read secrets. The person
-  # who runs terraform may write them: Terraform puts the key in as that
+  # 18. Two roles. The app may only read, and only the one secret: its
+  # role is on the secret, not on the vault. The person who runs terraform
+  # may write the secrets of the vault: Terraform puts the key in as that
   # person.
   assert {
     condition = alltrue([
       azurerm_role_assignment.app_reads_secrets.role_definition_name == "Key Vault Secrets User",
-      azurerm_role_assignment.app_reads_secrets.scope == azurerm_key_vault.secrets.id,
       azurerm_role_assignment.app_reads_secrets.principal_id == azurerm_user_assigned_identity.app.principal_id,
     ])
-    error_message = "The identity of the app must have the role Key Vault Secrets User, on the vault and on nothing more."
+    error_message = "The identity of the app must have the role Key Vault Secrets User."
+  }
+  assert {
+    condition     = azurerm_role_assignment.app_reads_secrets.scope == azurerm_key_vault_secret.owner_key.resource_versionless_id
+    error_message = "The role of the app must be on the one secret, the owner's key."
+  }
+  assert {
+    condition     = azurerm_role_assignment.app_reads_secrets.scope != azurerm_key_vault.secrets.id
+    error_message = "The role of the app must not be on the whole vault."
   }
   assert {
     condition = alltrue([

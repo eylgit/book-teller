@@ -170,29 +170,31 @@ The page has one form: the chapter, and the owner's key. The web app, [main.py](
 
 **Three guards stand in front of a run,** and each refuses before anything costs money:
 
-- **The owner's key:** a long random text, sent in the header `Authorization: Bearer …`. It stands in for a login until there is one. Both routes need it. With no key set up, the app refuses everybody (503); with a wrong key, 401. The two keys are compared in a way that takes the same time for a right and for a wrong one.
+- **The owner's key:** a long random text, sent in the header `Authorization: Bearer …`. It stands in for a login until there is one. Both routes need it, and it is checked before anything else of the request is looked at. With no key set up, the app refuses everybody (503); with a wrong key, 401. The two keys are compared in a way that takes the same time for a right and for a wrong one.
 - **The limit on the pasted text:** 5,000 words and 40,000 characters (422).
 - **The cap of the day:** at most 20 runs may start on one day of the clock UTC, counted from the rows of the day (429). A budget of Azure cannot do this: it only sends a notice, hours later.
 
-**Where the key is.** On Azure it rests in Azure Key Vault. The settings of the app hold only the address of that secret; Azure fetches the value with the app's managed identity and hands it to the container as an environment variable. Terraform makes the key at random, so nobody types it. In the browser, the page keeps the key for two days in `localStorage`, and forgets it when the app answers 401 or when "Forget the key" is pressed.
+**Where the key is.** On Azure it rests in Azure Key Vault. The settings of the app hold only the address of that secret; Azure fetches the value with the app's managed identity and hands it to the container as an environment variable. The identity may read this one secret and nothing else in the vault. Terraform makes the key at random, so nobody types it. In the browser, the page keeps the key for two days in `localStorage`, and forgets it when the app answers 401 or when "Forget the key" is pressed.
 
 **Known limits:**
 
-- **A run dies with the web app.** After a deploy or a crash in the middle of a run, the run stays "writing" or "checking" for ever. Azure also stops an idle app five minutes after its last request; an open page keeps asking, so it keeps the app alive. A queue and a worker are the next task.
+- **A run dies with the web app.** After a deploy or a crash in the middle of a run, the run stays "writing" or "checking" for ever. The same happens when the database goes away in the middle of a run. Azure also stops an idle app five minutes after its last request; an open page keeps asking, so it keeps the app alive. A queue and a worker are the next task.
 - The cap counts runs, not money. Two runs that start at the same moment can both pass it.
 - A request is read whole before the limit on the text is checked, and nothing limits the size of a request.
 - The key rests in the owner's browser, where a script that runs in the page could read it. So the page loads no script from anywhere, and it shows every text of the model as plain text, never as HTML; a test reads the page for that.
 - The key is also in Terraform's state file, on the maintainer's machine.
-- The script inside the page has no test of its own.
+- The script inside the page has no test of its own. Known and left: "Forget the key" does not stop a run that the page is asking about; a key that gets older than two days while the page is open is asked for only after a reload; and after a lost connection the page asks again every two seconds without a word.
+- `do_run` does not look at the status of the run. Nothing calls it twice today; behind a queue, a message that comes twice would pay for the model twice.
 
 **To make a run on your own machine,** start only the database with Docker Compose, and the web app on the machine itself, where your login to Azure is. Your `backend/.env` holds the settings of the model and of the database, and an owner's key that you make up. From the folder `backend`:
 
 ```
 docker compose up --detach db
+PYTHONPATH=src uv run --env-file .env python -m book_teller.migrate
 uv run --env-file .env uvicorn book_teller.main:app --app-dir src --port 8000
 ```
 
-Then open <http://localhost:8000>. A run makes two real calls: about one or two US cents.
+The second line makes the tables, or changes nothing when they are there. Then open <http://localhost:8000>. A run makes two real calls: about one or two US cents.
 
 Why each choice was made: [the plan of that task](docs/plans/2026-11-27-run_without_queue/plan.md).
 
@@ -206,7 +208,7 @@ The pipeline runs in a private project of Azure DevOps, because Microsoft no lon
 
 ## The cloud
 
-The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password. And a database server, Azure Database for PostgreSQL, in its smallest size: it takes no password either, and its firewall lets only Azure's own services in. The same identity has one role on the model resource, so the app calls the model with no key. One secret exists, the owner's key: it rests in Azure Key Vault, where the identity may only read.
+The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password. And a database server, Azure Database for PostgreSQL, in its smallest size: it takes no password either, and its firewall lets only Azure's own services in. The same identity has one role on the model resource, so the app calls the model with no key. One secret exists, the owner's key: it rests in Azure Key Vault, where the identity may read that one secret and nothing more.
 
 The model resource itself is made by hand and is not in the file. What is the maintainer's own (the subscription, a sign-in name, the address of the model) comes from a file `terraform.tfvars` that git does not see.
 

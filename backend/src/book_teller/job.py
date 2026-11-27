@@ -28,7 +28,7 @@ from book_teller.settings import read_model_settings
 from book_teller.tables import Status
 
 # The reason of a run that failed for something that is not a failed model
-# call: a database that went away, or a bug in our own code.
+# call, such as a bug in our own code.
 UNEXPECTED = "unexpected error"
 
 
@@ -38,7 +38,11 @@ def do_run(engine: Engine, run_id: int, ask: Ask, retry: RetryPolicy = RETRY) ->
     A model call that fails for good is a result: the run is saved as
     failed, with the reason, and no error leaves this function. Anything
     else that goes wrong is saved as failed too, and then the error goes on
-    to the caller, so that it shows in the log.
+    to the caller, so that it shows in the log. When the database itself
+    is gone, that cannot be saved either, and the run stays as it was.
+
+    A known limit: the status of the run is not looked at. A second call
+    for the same run would ask the model again.
 
     Raises NoSuchRun, and asks no model, when no run has this number.
     """

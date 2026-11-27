@@ -198,10 +198,12 @@ resource "azurerm_role_assignment" "maintainer_writes_secrets" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
-# "The identity of the app may read the secrets of this vault", and nothing
-# more.
+# "The identity of the app may read this one secret", and nothing more.
+# The scope is the secret, not the vault: a second secret in the same vault
+# is closed to the app until a role of its own opens it. The role is the
+# same in both cases; the scope decides how far it reaches.
 resource "azurerm_role_assignment" "app_reads_secrets" {
-  scope                = azurerm_key_vault.secrets.id
+  scope                = azurerm_key_vault_secret.owner_key.resource_versionless_id
   role_definition_name = "Key Vault Secrets User"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
   principal_type       = "ServicePrincipal"
@@ -360,7 +362,8 @@ resource "azurerm_container_app" "app" {
   # The one secret of the app. It holds no value: only the address of the
   # owner's key in the vault (a Key Vault reference), and the identity that
   # fetches it. Azure fetches the value and hands it to the container. The
-  # address has no version, so the app always gets the newest value.
+  # address has no version, so a new value in the vault reaches the app: Azure
+  # looks for one within 30 minutes, and then starts the app again.
   secret {
     name                = "owner-key"
     key_vault_secret_id = azurerm_key_vault_secret.owner_key.versionless_id

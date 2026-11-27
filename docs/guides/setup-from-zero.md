@@ -70,6 +70,8 @@ terraform apply
 az keyvault secret show --vault-name VAULT --name owner-key --query value --output tsv
 ```
 
+- **To change the owner's key,** e.g. after it was shown to somebody: `terraform apply -replace=random_password.owner_key`. Terraform makes a new key and puts it into the vault as a new version of the secret. Azure hands it to the app within 30 minutes; a new deploy does it at once.
+
 ## 4. Azure DevOps: the pipeline, made by hand
 
 - **A project,** private: Microsoft no longer offers public ones.

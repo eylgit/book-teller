@@ -86,6 +86,6 @@ The order is by risk. The cloud is the risky part, so the ship path comes first,
 ## What could go wrong
 
 - **A permission.** Each managed identity needs its role on each service. A missing role is the most likely place for the build to stop.
-- **The queue and the job.** That a Container Apps job can be started from Service Bus with a managed identity is not checked yet. Task 9 checks it first.
+- **The queue and the job.** That a Container Apps job can be started from Service Bus with a managed identity is not checked yet. Task 9b checks it first.
 - **Structured output together with the thinking setting** through LangChain's model classes: bug reports are open. Task 4 checks it first.
-- **Cost.** The database runs all the time and is the largest part. A daily money cap stops a loop of model calls.
+- **Cost.** The database runs all the time and is the largest part. A cap on the runs of one day stops a loop of model calls.

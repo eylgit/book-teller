@@ -12,12 +12,20 @@ the app stops in the middle of a run, the run stays "writing" or "checking"
 for ever.
 """
 
+import logging
 import secrets
 import threading
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import BackgroundTasks, FastAPI, Header, HTTPException, Request
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Request,
+)
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import Engine
@@ -31,6 +39,11 @@ from book_teller.job import ask_from_environment, do_run
 from book_teller.settings import RunSettings, SettingsError, read_run_settings
 
 STATIC_FOLDER = Path(__file__).parent / "static"
+
+# Where this file writes a line when something goes wrong. Python's own
+# logging prints such a line to the output of the program, which Azure
+# keeps.
+log = logging.getLogger(__name__)
 
 # The limit on the pasted text. A longer text is refused before it costs
 # anything. Words are the pieces between spaces. The limit on characters
@@ -136,10 +149,13 @@ def same_key(sent: str, key: str) -> bool:
 def check_the_key(settings: RunSettings, authorization: str | None) -> None:
     """Let the request go on only when it carries the owner's key.
 
-    With no key set up, nobody may: the app never falls open.
+    With no key set up, nobody may: the app never falls open. An empty
+    key counts as no key, also here: an empty key would be "right" for a
+    request that sends an empty one.
     """
-    if settings.owner_key is None:
+    if not (settings.owner_key or "").strip():
         raise HTTPException(503, "The app has no owner's key set up.")
+    assert settings.owner_key is not None
     # The header is "Bearer", a space, and the key.
     scheme, _, sent = (authorization or "").partition(" ")
     if scheme != "Bearer" or not same_key(sent.strip(), settings.owner_key):
@@ -156,6 +172,9 @@ def check_the_chapter(chapter: str) -> None:
     words = len(chapter.split())
     if words == 0:
         raise HTTPException(422, "The chapter is empty.")
+    # NUL, the character with the number 0. PostgreSQL takes it in no text.
+    if "\x00" in chapter:
+        raise HTTPException(422, "The chapter holds a NUL character.")
     if len(chapter) > MAX_CHARACTERS:
         raise HTTPException(
             422,
@@ -229,15 +248,33 @@ def make_app(
 
     @app.exception_handler(SettingsError)
     def not_set_up(request: Request, error: SettingsError) -> JSONResponse:
-        # A setting is missing or wrong. The message names its environment
-        # variable, and never a value.
-        return JSONResponse({"detail": f"The app is not set up. {error}"}, 503)
+        # A setting is missing or wrong. Which one goes into the log, not
+        # into the answer: the message can hold the wrong value.
+        log.error("The app is not set up: %s", error)
+        return JSONResponse({"detail": "The app is not set up."}, 503)
 
     @app.exception_handler(SQLAlchemyError)
     def no_database(request: Request, error: SQLAlchemyError) -> JSONResponse:
         # The words of the library stay out of the answer: they can hold the
-        # address of the database.
-        return JSONResponse({"detail": "The database cannot be reached."}, 503)
+        # address of the database. Their first line goes into the log; the
+        # lines after it hold the SQL statement and its values.
+        log.error("The database gave an error: %s", str(error).splitlines()[0])
+        return JSONResponse({"detail": "The database gave an error."}, 503)
+
+    def the_owner(
+        authorization: Annotated[str | None, Header()] = None,
+    ) -> RunSettings:
+        """Let only the owner go on. FastAPI calls this before a route of a run.
+
+        It is a "dependency": a function that a route names, and that
+        FastAPI calls first, for each request of that route. FastAPI fills
+        "authorization" from the header of that name. It runs before the
+        body of the request is checked, so a stranger learns nothing but
+        "401", whatever the request holds.
+        """
+        run_settings = parts.settings()
+        check_the_key(run_settings, authorization)
+        return run_settings
 
     @app.get("/")
     def page() -> FileResponse:
@@ -254,16 +291,15 @@ def make_app(
     def start_a_run(
         body: NewRun,
         tasks: BackgroundTasks,
-        authorization: Annotated[str | None, Header()] = None,
+        run_settings: Annotated[RunSettings, Depends(the_owner)],
     ) -> Started:
         """Start a run: three guards, then a new row, then the answer.
 
         FastAPI fills the arguments in: "body" from the JSON of the request,
-        "tasks" as the list of work to do after the answer, "authorization"
-        from the header of that name.
+        "tasks" as the list of work to do after the answer, and
+        "run_settings" as what the_owner returned. The first guard, the
+        key, is the_owner: when this function starts, the key was right.
         """
-        run_settings = parts.settings()
-        check_the_key(run_settings, authorization)
         check_the_chapter(body.chapter)
         database = parts.engine()
         # The cap of the day. Every run that was started today counts.
@@ -281,13 +317,12 @@ def make_app(
         start_run(tasks, database, run_id, model)
         return Started(id=run_id)
 
-    @app.get("/runs/{run_id}")
-    def how_far(
-        run_id: int, authorization: Annotated[str | None, Header()] = None
-    ) -> RunAnswer:
+    # "dependencies": the_owner is called first, and what it returns is not
+    # needed here. So the key is checked before the run is looked for, and a
+    # stranger does not learn which runs exist.
+    @app.get("/runs/{run_id}", dependencies=[Depends(the_owner)])
+    def how_far(run_id: int) -> RunAnswer:
         """How far is this run? When it is done: the script, the faults, the sums."""
-        # The key first, so that a stranger does not learn which runs exist.
-        check_the_key(parts.settings(), authorization)
         run = runs.read_run(parts.engine(), run_id)
         if run is None:
             raise HTTPException(404, f"There is no run {run_id}.")
