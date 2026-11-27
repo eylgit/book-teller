@@ -1,6 +1,6 @@
 # Task 8: the database
 
-**State:** planned on 2026-11-26. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, the database server on Azure is made, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Not merged yet, so the app on Azure has not used its database.
+**State:** planned on 2026-11-26. The maintainer said yes to the plan on the same day, with the five answers below. The code is built, the database server on Azure is made, and a second agent has reviewed the change: see "What was seen" and "What the review changed". Merged on 2026-11-26, by a pull request. The first deploy ran the migration on Azure, with the app logged in as its managed identity. All ten exit criteria are met. A second, small pull request followed the merge, with this final state.
 
 It is the eighth task of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -242,7 +242,11 @@ The row of the run, read with plain SQL: status `done`, 10,332 tokens in, 3,092 
 
 **The smoke test** passed, with its new line: the migrations made the three tables on an empty database.
 
-**On Azure.** The first plan listed five things to add and two to change. The second change was not expected: Terraform wanted to remove a label (a tag) from the registry, which had been added by hand in the portal and was not in `main.tf`. The maintainer chose to keep the label, so it is written into the file now. Then: a saved plan with five to add and one to change, the apply of that plan, and a new plan that says "No changes". Nothing has logged in to that database yet: the first deploy after the merge does.
+**On Azure.** The first plan listed five things to add and two to change. The second change was not expected: Terraform wanted to remove a label (a tag) from the registry, which had been added by hand in the portal and was not in `main.tf`. The maintainer chose to keep the label, so it is written into the file now. Then: a saved plan with five to add and one to change, the apply of that plan, and a new plan that says "No changes". 
+
+**The pipeline.** The run on the pull request was the first with a database for the tests, and it passed.
+
+**The first deploy,** after the merge. The run on `main` passed: the new image answered `/health`. The log of the app shows the order of its start: first the line "The migrations ran: the tables are up to date.", and under a second later the web server, as process number 1 of the container. So the app logged in to the database with a token of its managed identity, over the firewall rule for Azure's services, and made its tables. No password exists. The tables themselves were not looked at: the maintainer's machine cannot reach the server.
 
 ## What the review changed
 
