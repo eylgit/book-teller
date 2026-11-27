@@ -1,6 +1,6 @@
 # The build of the image gets a step of its own
 
-**State:** planned on 2026-11-27. The maintainer said yes on the same day, and then made the design stricter: see "Decided by the maintainer". The change is made, and a second agent has reviewed its first form: see "What the review changed". Not merged yet.
+**State:** planned on 2026-11-27. The maintainer said yes on the same day, and then made the design stricter: see "Decided by the maintainer". The change is made, and a second agent has reviewed its first form: see "What the review changed". Merged on 2026-11-27, by a pull request, and deployed: see "What was seen". A second, small pull request followed the merge, with this final state.
 
 A small change after [task 8](../2026-11-26-database/plan.md) of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md).
 
@@ -79,6 +79,15 @@ A second agent reviewed the first form of this change, in which the smoke test s
 - **Not taken:** a test that holds the build command in the README.
 
 After these changes the agent tried five small breakages on copies of the two files: the smoke test builds when no image is there · the smoke test has an image name to fall back on · the push takes the name · the smoke test gets the name · the id is read from another image. The tests noticed all five.
+
+## What was seen
+
+On 2026-11-27, in the run of the pull request:
+
+- **The step "Build the image"** built the image, named it `book-teller:candidate`, and printed its id: the id that Docker itself had printed two lines before.
+- **The step "Smoke test of the image"** was called with that id, printed the same id as "the image under test", and passed.
+
+After the merge, the run on `main` passed too: the push step took the image by its id, and the live app ran the new image and answered. The maintainer ran the smoke test on the own machine as well.
 
 ## How it is undone
 
