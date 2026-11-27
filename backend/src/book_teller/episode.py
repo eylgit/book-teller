@@ -19,6 +19,7 @@ run fails, it starts again from the first step.
 """
 
 import operator
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Annotated, Protocol, TypedDict, cast
 
@@ -108,13 +109,17 @@ RETRY = RetryPolicy(max_attempts=2, retry_on=worth_a_second_try)
 
 type EpisodeGraph = CompiledStateGraph[EpisodeState, None, EpisodeState, EpisodeState]
 
+# A function that is told when a step has ended: the name of the step, and
+# what the step returned. See run_episode.
+type OnStep = Callable[[str, EpisodeState], None]
+
 
 def build_graph(ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeGraph:
     """Put the graph together: START -> write -> check -> guard -> END.
 
-    run_episode below runs it: "invoke" starts at START with the chapter, and
-    its answer is the last state. A step that fails for good ends the run: its
-    ModelCallError leaves "invoke" as it is.
+    run_episode below runs it, from START with the chapter to the last
+    state. A step that fails for good ends the run: its ModelCallError
+    leaves the graph as it is.
     """
 
     def write(state: EpisodeState) -> EpisodeState:
@@ -156,11 +161,36 @@ def build_graph(ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeGraph:
     return builder.compile()
 
 
-def run_episode(chapter: str, ask: Ask, retry: RetryPolicy = RETRY) -> EpisodeState:
-    """One run of the graph, from the chapter to the last state."""
-    last_state = build_graph(ask, retry).invoke({"chapter": chapter})
-    # LangGraph types this answer of "invoke" as a dictionary of anything.
-    # It is our state.
+def run_episode(
+    chapter: str,
+    ask: Ask,
+    retry: RetryPolicy = RETRY,
+    on_step: OnStep | None = None,
+) -> EpisodeState:
+    """One run of the graph, from the chapter to the last state.
+
+    With "on_step", the caller is told each time a step has ended, before
+    the next step starts. So a caller can save how far the run is. A step
+    that was tried twice is told once, when it has answered. When a step
+    fails for good, the steps before it were told already, and then the
+    error leaves this function.
+    """
+    graph = build_graph(ask, retry)
+    last_state: object = {"chapter": chapter}
+    # "stream" runs the graph as "invoke" does, and hands over a piece after
+    # each step. We ask for two kinds of piece:
+    # - "updates": the name of the step that ended, and what it returned;
+    # - "values": the whole state as it is now. The last one is the result.
+    pieces = graph.stream({"chapter": chapter}, stream_mode=["updates", "values"])
+    for kind, piece in pieces:
+        if kind == "values":
+            last_state = piece
+        elif on_step is not None:
+            # One "updates" piece: {the name of the step: what it returned}.
+            for step, result in cast(dict[str, EpisodeState], piece).items():
+                on_step(step, result)
+    # LangGraph types these pieces loosely, so "cast" tells the type checker
+    # what they are. The last state is our state.
     return cast(EpisodeState, last_state)
 
 

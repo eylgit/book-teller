@@ -65,6 +65,22 @@ mock_provider "azurerm" {
       id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.App/containerApps/ca-book-teller"
     }
   }
+  mock_resource "azurerm_key_vault" {
+    defaults = {
+      id        = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.KeyVault/vaults/kv-book-teller-test"
+      vault_uri = "https://kv-book-teller-test.vault.azure.net/"
+    }
+  }
+  # A secret has an address, not an id of the usual shape. With a version at
+  # its end it names one value; without, always the newest.
+  mock_resource "azurerm_key_vault_secret" {
+    defaults = {
+      id             = "https://kv-book-teller-test.vault.azure.net/secrets/owner-key/0123456789abcdef0123456789abcdef"
+      versionless_id = "https://kv-book-teller-test.vault.azure.net/secrets/owner-key"
+      # The same secret as Azure's own kind of id, which a role can point to.
+      resource_versionless_id = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-book-teller/providers/Microsoft.KeyVault/vaults/kv-book-teller-test/secrets/owner-key"
+    }
+  }
   mock_data "azurerm_client_config" {
     defaults = {
       subscription_id = "00000000-0000-0000-0000-000000000000"
@@ -74,10 +90,20 @@ mock_provider "azurerm" {
   }
 }
 
-# The maintainer's own sign-in name is not in main.tf: it comes from the
-# shell. The tests hand in a made-up one.
+# The stand-in for the plug-in that makes random values. It gives a made-up
+# text where the real one gives a random one.
+mock_provider "random" {}
+
+# What is the maintainer's own is not in main.tf: the subscription, the
+# sign-in name, and the three facts of the model resource, which was made by
+# hand. They come from a file that git does not see. The tests hand in
+# made-up ones.
 variables {
+  subscription_id     = "00000000-0000-0000-0000-000000000000"
   database_admin_name = "maintainer@example.invalid"
+  model_resource_id   = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-model/providers/Microsoft.CognitiveServices/accounts/model-test"
+  model_endpoint      = "https://model-test.example.invalid/openai/v1/"
+  model_deployment    = "a-deployment"
 }
 
 run "the_cloud_as_written" {
@@ -162,10 +188,30 @@ run "the_cloud_as_written" {
     error_message = "The role must be given to the identity of the app."
   }
 
-  # 6. The app holds no secret.
+  # 6. The app holds no value of a secret. It has one secret, the owner's
+  # key, and that is only a pointer: the address of the secret in the vault,
+  # and the identity that fetches it. (Before the owner's key existed, this
+  # test said: the app has no secret at all.)
   assert {
-    condition     = length(azurerm_container_app.app.secret) == 0
-    error_message = "The app must hold no secret."
+    condition     = length(azurerm_container_app.app.secret) == 1
+    error_message = "The app must have exactly one secret: the owner's key."
+  }
+  assert {
+    condition     = one(azurerm_container_app.app.secret[*].name) == "owner-key"
+    error_message = "The one secret of the app must be the owner's key."
+  }
+  assert {
+    condition     = alltrue([for each in azurerm_container_app.app.secret : each.value == null || each.value == ""])
+    error_message = "The secret of the app must hold no value: the value stays in the vault."
+  }
+  assert {
+    # The address without a version: the app always gets the newest value.
+    condition     = one(azurerm_container_app.app.secret[*].key_vault_secret_id) == azurerm_key_vault_secret.owner_key.versionless_id
+    error_message = "The secret of the app must point to the owner's key in the vault of this file."
+  }
+  assert {
+    condition     = one(azurerm_container_app.app.secret[*].identity) == azurerm_user_assigned_identity.app.id
+    error_message = "The secret must be fetched as the identity of the app."
   }
 
   # 7. Every thing is in UK South, the region of the model.
@@ -281,21 +327,108 @@ run "the_cloud_as_written" {
     error_message = "Both administrators must be on the server of this file."
   }
 
-  # 14. The app is told where the database is, and to log in with a token.
-  # These are settings, not secrets: test 6 still holds.
+  # 14. The app is told where the database is, and to log in with a token;
+  # and where the model is. These are settings, not secrets, so they are
+  # plain values. The owner's key is not in this list: see 15.
   assert {
-    condition = { for each in azurerm_container_app.app.template[0].container[0].env : each.name => each.value } == {
+    condition = { for each in azurerm_container_app.app.template[0].container[0].env : each.name => each.value if each.name != "BOOK_TELLER_OWNER_KEY" } == {
       BOOK_TELLER_DATABASE_HOST  = azurerm_postgresql_flexible_server.database.fqdn
       BOOK_TELLER_DATABASE_NAME  = "book_teller"
       BOOK_TELLER_DATABASE_USER  = azurerm_user_assigned_identity.app.name
       BOOK_TELLER_DATABASE_LOGIN = "azure"
       # Which identity the code asks a token for.
       AZURE_CLIENT_ID = azurerm_user_assigned_identity.app.client_id
+      # The model: its address and the name of its deployment, from the
+      # variables.
+      BOOK_TELLER_MODEL_ENDPOINT   = "https://model-test.example.invalid/openai/v1/"
+      BOOK_TELLER_MODEL_DEPLOYMENT = "a-deployment"
     }
-    error_message = "The app must get exactly the five settings of the database, as plain values."
+    error_message = "The app must get exactly these seven settings, as plain values."
+  }
+
+  # 15. The owner's key reaches the app by the name of its secret, never as
+  # a plain value. No other setting comes from a secret.
+  assert {
+    condition     = { for each in azurerm_container_app.app.template[0].container[0].env : each.name => each.secret_name if each.secret_name != null && each.secret_name != "" } == { BOOK_TELLER_OWNER_KEY = "owner-key" }
+    error_message = "Exactly one setting must come from a secret: BOOK_TELLER_OWNER_KEY, from owner-key."
   }
   assert {
-    condition     = alltrue([for each in azurerm_container_app.app.template[0].container[0].env : each.secret_name == null || each.secret_name == ""])
-    error_message = "No setting of the app may come from a secret."
+    condition     = alltrue([for each in azurerm_container_app.app.template[0].container[0].env : each.value == null || each.value == "" if each.name == "BOOK_TELLER_OWNER_KEY"])
+    error_message = "The owner's key must not be a plain value of the app."
+  }
+
+  # 16. The vault: rights are given by roles, as everywhere in this file.
+  assert {
+    condition     = azurerm_key_vault.secrets.rbac_authorization_enabled == true
+    error_message = "The vault must give rights by role assignments."
+  }
+  assert {
+    condition     = azurerm_key_vault.secrets.sku_name == "standard"
+    error_message = "The vault must be the standard kind, the cheaper one."
+  }
+  assert {
+    condition     = azurerm_key_vault.secrets.location == "uksouth"
+    error_message = "The vault must be in UK South (uksouth)."
+  }
+  assert {
+    condition     = azurerm_key_vault.secrets.tenant_id == data.azurerm_client_config.current.tenant_id
+    error_message = "The logins of the vault must come from the tenant of this subscription."
+  }
+
+  # 17. The owner's key: 48 random characters, kept in the vault.
+  assert {
+    condition     = random_password.owner_key.length == 48
+    error_message = "The owner's key must have 48 characters."
+  }
+  assert {
+    # Letters and digits only: the key travels in an HTTP header.
+    condition     = random_password.owner_key.special == false
+    error_message = "The owner's key must hold letters and digits only."
+  }
+  assert {
+    condition     = azurerm_key_vault_secret.owner_key.name == "owner-key"
+    error_message = "The secret must have the name owner-key."
+  }
+  assert {
+    condition     = azurerm_key_vault_secret.owner_key.key_vault_id == azurerm_key_vault.secrets.id
+    error_message = "The owner's key must be in the vault of this file."
+  }
+
+  # 18. Two roles. The app may only read, and only the one secret: its
+  # role is on the secret, not on the vault. The person who runs terraform
+  # may write the secrets of the vault: Terraform puts the key in as that
+  # person.
+  assert {
+    condition = alltrue([
+      azurerm_role_assignment.app_reads_secrets.role_definition_name == "Key Vault Secrets User",
+      azurerm_role_assignment.app_reads_secrets.principal_id == azurerm_user_assigned_identity.app.principal_id,
+    ])
+    error_message = "The identity of the app must have the role Key Vault Secrets User."
+  }
+  assert {
+    condition     = azurerm_role_assignment.app_reads_secrets.scope == azurerm_key_vault_secret.owner_key.resource_versionless_id
+    error_message = "The role of the app must be on the one secret, the owner's key."
+  }
+  assert {
+    condition     = azurerm_role_assignment.app_reads_secrets.scope != azurerm_key_vault.secrets.id
+    error_message = "The role of the app must not be on the whole vault."
+  }
+  assert {
+    condition = alltrue([
+      azurerm_role_assignment.maintainer_writes_secrets.role_definition_name == "Key Vault Secrets Officer",
+      azurerm_role_assignment.maintainer_writes_secrets.scope == azurerm_key_vault.secrets.id,
+      azurerm_role_assignment.maintainer_writes_secrets.principal_id == data.azurerm_client_config.current.object_id,
+    ])
+    error_message = "The person who runs terraform must have the role Key Vault Secrets Officer, on the vault and on nothing more."
+  }
+
+  # 19. The app may call the model: one role, on the model resource only.
+  assert {
+    condition = alltrue([
+      azurerm_role_assignment.app_calls_the_model.role_definition_name == "Cognitive Services OpenAI User",
+      azurerm_role_assignment.app_calls_the_model.scope == var.model_resource_id,
+      azurerm_role_assignment.app_calls_the_model.principal_id == azurerm_user_assigned_identity.app.principal_id,
+    ])
+    error_message = "The identity of the app must have the role Cognitive Services OpenAI User, on the model resource and on nothing more."
   }
 }

@@ -99,6 +99,15 @@ grep --quiet "Book Teller" <<< "$page" \
     || fail "the page does not hold the words Book Teller"
 echo "ok: the page holds the words Book Teller"
 
+# This container has no owner's key set up. So the start of a run must be
+# refused, with 503: an app with no key lets nobody in. "--write-out" prints
+# only the status code of the answer, and the answer itself is thrown away.
+code="$(curl --silent --max-time 10 --output /dev/null --write-out '%{http_code}' \
+    --request POST --header 'Content-Type: application/json' \
+    --data '{"chapter": "A chapter."}' http://127.0.0.1:8001/runs)"
+[ "$code" = "503" ] || fail "the start of a run without a key answered $code, not 503"
+echo "ok: with no key set up, the start of a run is refused ($code)"
+
 # The user number 0 is root, whatever its name is.
 user_number="$(docker exec "$CONTAINER" id -u)"
 [ "$user_number" != "0" ] || fail "the app runs as root"

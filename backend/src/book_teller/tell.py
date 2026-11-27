@@ -24,8 +24,6 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
 
-from langchain_openai import ChatOpenAI
-from pydantic import BaseModel
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -33,13 +31,11 @@ from book_teller import runs
 from book_teller.check_step import Flag, numbered_script
 from book_teller.database import engine_from_environment
 from book_teller.episode import Ask, picture, run_episode
-from book_teller.model_call import (
-    ModelAnswer,
-    ModelCallError,
-    ask_model,
-    azure_login,
-    make_model,
-)
+
+# The real "ask the model" lives in job.py, which the web app uses too.
+# "as ask_with": this file hands the name on to whoever imports it from here.
+from book_teller.job import ask_with as ask_with
+from book_teller.model_call import ModelCallError, azure_login, make_model
 from book_teller.settings import SettingsError, read_model_settings
 from book_teller.tables import Status
 
@@ -59,8 +55,8 @@ def tell(chapter: str, ask: Ask, out: TextIO, engine: Engine | None = None) -> i
     run_id: int | None = None
     if engine is not None:
         run_id = runs.new_run(engine, chapter)
-        # The graph runs in one go, so this script cannot tell the database
-        # when the writer is done and the checker starts.
+        # This script does not tell the database when the writer is done and
+        # the checker starts. The run from the page does: see job.py.
         runs.set_status(engine, run_id, Status.WRITING)
     try:
         state = run_episode(chapter, ask)
@@ -120,17 +116,6 @@ def tell(chapter: str, ask: Ask, out: TextIO, engine: Engine | None = None) -> i
 def _first_line(flag: Flag) -> str:
     where = f"S{flag.sentence}" if flag.sentence else "no sentence"
     return f"- {where}, {flag.kind.value}: {flag.reason}\n"
-
-
-def ask_with(model: ChatOpenAI) -> Ask:
-    """The real "ask the model": ask_model, with the model already inside."""
-
-    def ask[Shape: BaseModel](
-        instructions: str, text: str, shape: type[Shape]
-    ) -> ModelAnswer[Shape]:
-        return ask_model(model, instructions, text, shape)
-
-    return ask
 
 
 def main(arguments: Sequence[str] | None = None) -> int:

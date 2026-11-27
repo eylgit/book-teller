@@ -226,3 +226,87 @@ def test_the_picture_in_the_readme_is_the_one_that_the_library_prints() -> None:
     readme = Path(__file__).parents[2] / "README.md"
 
     assert picture().strip() in readme.read_text(encoding="utf-8")
+
+
+# ---- The steps are reported, one by one, while the graph runs. ----
+# The run in the web app saves "checking" when the writer has ended. So it
+# must learn that a step has ended before the whole graph has.
+
+
+def test_each_step_is_reported_when_it_ends_in_the_order_of_the_graph() -> None:
+    reported: list[tuple[str, list[str]]] = []
+
+    def on_step(step: str, result: EpisodeState) -> None:
+        # The name of the step, and the keys of the state that it changed.
+        reported.append((step, sorted(result)))
+
+    run_episode(CHAPTER, FakeAsk(), NO_WAIT, on_step)
+
+    assert reported == [
+        ("write", ["costs", "script"]),
+        ("check", ["costs", "flags"]),
+        ("guard", ["checked"]),
+    ]
+
+
+def test_a_reported_step_hands_over_what_the_step_made() -> None:
+    results: dict[str, EpisodeState] = {}
+
+    run_episode(CHAPTER, FakeAsk(), NO_WAIT, results.__setitem__)
+
+    assert results["write"]["script"] == SCRIPT.sentences
+    assert [cost.step for cost in results["write"]["costs"]] == ["write"]
+    assert results["check"]["flags"] == FLAGS.flags
+
+
+def test_reporting_the_steps_does_not_change_the_last_state() -> None:
+    silent = run(FakeAsk())
+
+    reporting = run_episode(CHAPTER, FakeAsk(), NO_WAIT, lambda step, result: None)
+
+    assert reporting == silent
+
+
+def test_the_writer_is_reported_at_work_before_the_checker_is_asked() -> None:
+    order: list[str] = []
+    ask = FakeAsk()
+
+    def watching[Shape: BaseModel](
+        instructions: str, text: str, shape: type[Shape]
+    ) -> ModelAnswer[Shape]:
+        order.append(f"asked for {shape.__name__}")
+        return ask(instructions, text, shape)
+
+    run_episode(
+        CHAPTER, watching, NO_WAIT, lambda step, result: order.append(f"{step} ended")
+    )
+
+    assert order == [
+        "asked for Script",
+        "write ended",
+        "asked for Flags",
+        "check ended",
+        "guard ended",
+    ]
+
+
+def test_a_step_that_was_tried_twice_is_reported_once() -> None:
+    steps: list[str] = []
+    ask = FakeAsk(fail_once={Script: failure(Reason.TIMEOUT)})
+
+    run_episode(CHAPTER, ask, NO_WAIT, lambda step, result: steps.append(step))
+
+    assert ask.shapes() == [Script, Script, Flags]
+    assert steps == ["write", "check", "guard"]
+
+
+def test_when_the_checker_fails_for_good_the_writer_was_already_reported() -> None:
+    # So the caller still holds what the writer cost.
+    results: dict[str, EpisodeState] = {}
+    ask = FakeAsk(fail_always={Flags: failure(Reason.NO_PERMISSION)})
+
+    with pytest.raises(ModelCallError):
+        run_episode(CHAPTER, ask, NO_WAIT, results.__setitem__)
+
+    assert list(results) == ["write"]
+    assert results["write"]["costs"][0].tokens_in == 100

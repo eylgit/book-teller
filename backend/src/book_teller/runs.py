@@ -10,7 +10,7 @@ the caller can keep it as long as it likes.
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import Engine, func, select, update
 from sqlalchemy.orm import Session
@@ -170,6 +170,22 @@ def read_run(engine: Engine, run_id: int) -> SavedRun | None:
                 for fault in faults
             ],
         )
+
+
+def count_started_today(engine: Engine) -> int:
+    """How many runs were started on this day of the clock UTC.
+
+    Every run counts, whatever became of it: a run that failed may have cost
+    money too. The cap of the day compares this number with its limit.
+    """
+    # The first moment of today, by the clock of the app. created_at is the
+    # clock of the database; the two differ by less than a second.
+    midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    with Session(engine) as session:
+        count = session.scalar(
+            select(func.count()).select_from(Run).where(Run.created_at >= midnight)
+        )
+        return count or 0
 
 
 def _update(session: Session, run_id: int, **values: object) -> None:
