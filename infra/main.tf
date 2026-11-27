@@ -19,13 +19,29 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "5.13.0"
     }
+    # The plug-in that makes random values. Terraform has no way of its own
+    # to make a random secret. It makes the owner's key, below.
+    random = {
+      source  = "hashicorp/random"
+      version = "3.9.1"
+    }
   }
 }
 
-# The subscription comes from the variable ARM_SUBSCRIPTION_ID of the
-# shell, so its id is not written in this repository.
+# What is the maintainer's own, and not in this repository: these variables
+# get their values from the file terraform.tfvars, which Terraform reads by
+# itself and git does not see. See docs/guides/setup-from-zero.md.
+
+# The subscription in which everything is made.
+variable "subscription_id" {
+  type        = string
+  description = "The id of the Azure subscription."
+}
+
 provider "azurerm" {
   features {}
+
+  subscription_id = var.subscription_id
 
   # A subscription must switch on each family of Azure services once,
   # before its first use. The first apply stopped here: the family of the
@@ -35,6 +51,7 @@ provider "azurerm" {
     "Microsoft.App",
     "Microsoft.ContainerRegistry",
     "Microsoft.DBforPostgreSQL",
+    "Microsoft.KeyVault",
     "Microsoft.ManagedIdentity",
     "Microsoft.OperationalInsights",
   ]
@@ -44,11 +61,28 @@ provider "azurerm" {
 data "azurerm_client_config" "current" {}
 
 # The sign-in name of the maintainer, who becomes an administrator of the
-# database. It comes from the variable TF_VAR_database_admin_name of the
-# shell, so the name of a person is not written in this repository.
+# database.
 variable "database_admin_name" {
   type        = string
   description = "The sign-in name of the person who runs terraform, as Microsoft Entra knows it."
+}
+
+# The model resource was made by hand, before this file existed, and it is
+# not made here. This file only gives the app a role on it, and tells the
+# app where it is.
+variable "model_resource_id" {
+  type        = string
+  description = "The Azure id of the model resource: /subscriptions/.../providers/Microsoft.CognitiveServices/accounts/NAME."
+}
+
+variable "model_endpoint" {
+  type        = string
+  description = "The address of the model service. It ends with /openai/v1/."
+}
+
+variable "model_deployment" {
+  type        = string
+  description = "The name that the model has in the model resource."
 }
 
 locals {
@@ -121,6 +155,79 @@ resource "azurerm_role_assignment" "app_pulls_images" {
   role_definition_name = "AcrPull"
   principal_id         = azurerm_user_assigned_identity.app.principal_id
   principal_type       = "ServicePrincipal"
+}
+
+# "This identity may call the models of this model resource", and nothing
+# more: it may not change the resource or read its keys. The code asks Azure
+# for a token as the identity, so no key of the model exists.
+resource "azurerm_role_assignment" "app_calls_the_model" {
+  scope                = var.model_resource_id
+  role_definition_name = "Cognitive Services OpenAI User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# The vault: Azure's safe for secrets. It holds the one secret of the app,
+# the owner's key. A secret is not written into this file or into the
+# settings of the app: it rests here, and who may read it is a role.
+resource "azurerm_key_vault" "secrets" {
+  # The name must be unique in all of Azure, like the name of the registry.
+  name                = "kv-book-teller-${local.unique}"
+  location            = local.location
+  resource_group_name = azurerm_resource_group.product.name
+  tenant_id           = data.azurerm_client_config.current.tenant_id
+  # The cheaper of the two kinds. The other keeps keys in special hardware.
+  sku_name = "standard"
+
+  # Rights are given by role assignments, as everywhere in this file, not
+  # by the older lists of the vault itself.
+  rbac_authorization_enabled = true
+
+  # A deleted secret can be brought back for so many days: the shortest
+  # time that Azure offers. A known limit: the vault has a public address,
+  # like the database. The login is the wall.
+  soft_delete_retention_days = 7
+}
+
+# "The person who runs terraform may write and read the secrets of this
+# vault." Terraform puts the owner's key in as that person, and the owner
+# reads it there.
+resource "azurerm_role_assignment" "maintainer_writes_secrets" {
+  scope                = azurerm_key_vault.secrets.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+# "The identity of the app may read the secrets of this vault", and nothing
+# more.
+resource "azurerm_role_assignment" "app_reads_secrets" {
+  scope                = azurerm_key_vault.secrets.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+  principal_type       = "ServicePrincipal"
+}
+
+# The owner's key: 48 random letters and digits. Nobody types it. Only a
+# request that sends it may start a run or read one.
+# A known limit: Terraform also writes it into its state file, which stays
+# on the maintainer's machine and never goes into git.
+resource "random_password" "owner_key" {
+  length = 48
+  # Letters and digits only: the key travels in an HTTP header.
+  special = false
+}
+
+# The key, kept in the vault. To read it:
+#   az keyvault secret show --vault-name VAULT --name owner-key --query value --output tsv
+resource "azurerm_key_vault_secret" "owner_key" {
+  name         = "owner-key"
+  value        = random_password.owner_key.result
+  key_vault_id = azurerm_key_vault.secrets.id
+
+  # Terraform writes the secret as the maintainer, so that role must exist
+  # first. A new role can need some minutes to work: if this step stops
+  # with "forbidden", run the apply again.
+  depends_on = [azurerm_role_assignment.maintainer_writes_secrets]
 }
 
 # The database server: PostgreSQL, run by Azure. Azure installs it, updates
@@ -250,6 +357,16 @@ resource "azurerm_container_app" "app" {
     identity = azurerm_user_assigned_identity.app.id
   }
 
+  # The one secret of the app. It holds no value: only the address of the
+  # owner's key in the vault (a Key Vault reference), and the identity that
+  # fetches it. Azure fetches the value and hands it to the container. The
+  # address has no version, so the app always gets the newest value.
+  secret {
+    name                = "owner-key"
+    key_vault_secret_id = azurerm_key_vault_secret.owner_key.versionless_id
+    identity            = azurerm_user_assigned_identity.app.id
+  }
+
   # The front door: HTTPS from the internet, passed on to port 8000 inside
   # the container, where uvicorn listens (backend/Dockerfile).
   ingress {
@@ -304,6 +421,20 @@ resource "azurerm_container_app" "app" {
         name  = "AZURE_CLIENT_ID"
         value = azurerm_user_assigned_identity.app.client_id
       }
+      # Where the model is. Not secrets: the login is the identity.
+      env {
+        name  = "BOOK_TELLER_MODEL_ENDPOINT"
+        value = var.model_endpoint
+      }
+      env {
+        name  = "BOOK_TELLER_MODEL_DEPLOYMENT"
+        value = var.model_deployment
+      }
+      # The owner's key: not a value, but the name of the secret above.
+      env {
+        name        = "BOOK_TELLER_OWNER_KEY"
+        secret_name = "owner-key"
+      }
     }
   }
 
@@ -315,9 +446,11 @@ resource "azurerm_container_app" "app" {
 
   # The right to pull must exist before the app first starts. So must its
   # login in the database, and the way through the firewall: the app runs
-  # the migrations at its start.
+  # the migrations at its start. And its right to read the vault: Azure
+  # fetches the owner's key when a new version of the app starts.
   depends_on = [
     azurerm_role_assignment.app_pulls_images,
+    azurerm_role_assignment.app_reads_secrets,
     azurerm_postgresql_flexible_server_active_directory_administrator.app,
     azurerm_postgresql_flexible_server_firewall_rule.azure_services,
   ]

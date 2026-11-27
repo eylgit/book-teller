@@ -4,7 +4,7 @@ Book Teller turns a book into a podcast series: the book told well by one voice,
 
 Every script will be checked against the book, and for each fault the checker will show the line of the book that proves it.
 
-**Status:** the skeleton, its pipeline, its cloud, the call to the model, the three steps of an episode, and the database. The app shows one page and answers one health address; it tells no book yet. The code that tells a chapter and saves the run exists and is tested, and a script runs it by hand, but no page uses it yet. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
+**Status:** one chapter, from the page to a checked script. The owner pastes a chapter into the page; the app writes a script that tells it, checks the script against the chapter, and shows the script with every fault that the checker found: see "A run from the page". Only the owner can start a run and read it. No sound yet, and no whole book. It runs on Azure, and a merge to `main` deploys it. See [the plan of milestone 1](docs/plans/2026-11-14-milestone_1_the_whole_path_once/plan.md). Before the app there was a probe, a small early test: can the model find faults that were planted in a script? See [its plan](docs/plans/2026-11-13-probe_planted_faults/plan.md) and [its code](experiments/2026-11-13-probe_planted_faults/).
 
 ## Run it
 
@@ -16,7 +16,7 @@ docker compose up --build
 
 It starts two containers: the app, and a PostgreSQL database beside it. The database takes no password and only your own machine can reach it. At its start the app makes its tables in that database.
 
-Then open <http://localhost:8000>. The address <http://localhost:8000/health> answers `{"status":"ok"}`.
+Then open <http://localhost:8000>. The address <http://localhost:8000/health> answers `{"status":"ok"}`. The page shows, but "Tell" answers that the app is not set up: a container on your machine has no owner's key and no login to a model. For a real run on your machine, see "A run from the page".
 
 A change to the page, `backend/src/book_teller/static/index.html`, shows after a reload of the browser, with no new build: `compose.yaml` puts the folder `backend/src` into the running container. A change to the Python code needs a restart: `docker compose restart`.
 
@@ -47,7 +47,7 @@ uv run mypy
 
 The tests need no internet, and no test asks a model. The tests of the database use a database of their own on the local server, `book_teller_test`, so they never touch the rows of the app. Without the local server those tests fail; they do not skip. `ruff` is the linter and the formatter; `mypy` is the type checker.
 
-The smoke test needs Docker and curl, and the ports 8000, 8001 and 5432 free: stop your own `docker compose up` first, with `docker compose down`. It starts the image of the app and asks it a few questions: does it answer, does it run as a user with no special rights, and did it make its tables in an empty database? It does not build the image that it tests: you name the image, and the script prints its id and when it was made. So build the image again after each change. Run both from the top folder:
+The smoke test needs Docker and curl, and the ports 8000, 8001 and 5432 free: stop your own `docker compose up` first, with `docker compose down`. It starts the image of the app and asks it a few questions: does it answer, does it refuse the start of a run when no owner's key is set up, does it run as a user with no special rights, and did it make its tables in an empty database? It does not build the image that it tests: you name the image, and the script prints its id and when it was made. So build the image again after each change. Run both from the top folder:
 
 ```
 docker build --tag book-teller:candidate backend
@@ -129,20 +129,19 @@ There are two checks:
 - It sees only the faults that the checker reports, not the ones that the checker missed.
 - **The quote is compared by letters, not by words.** So it may start or end in the middle of a word: the quote "he is not" is found in "she is nothing". A made-up quote that happens to be built of such pieces passes as proven.
 - A true quote that the model copied with another kind of dash, or shortened with "..." in the middle, is marked as not found. A looser comparison would also pass a made-up quote that is close to a real sentence.
-- Nothing limits the length of a chapter yet.
 
 Why each choice was made: [the plan of that task](docs/plans/2026-11-25-guard/plan.md).
 
 ## The database
 
-A run is kept in PostgreSQL, in two tables: `runs` (the chapter, the script, the status, and the sums of the tokens and the seconds) and `faults` (each fault of a run, with what the checker said and what the guard said). No page reads them yet; the script below writes them.
+A run is kept in PostgreSQL, in two tables: `runs` (the chapter, the script, the status, and the sums of the tokens and the seconds) and `faults` (each fault of a run, with what the checker said and what the guard said). The web app writes and reads them, and so does the script below.
 
 - **The tables are made by migrations:** files that change the tables, kept in git, in [backend/src/book_teller/migrations/versions](backend/src/book_teller/migrations/versions). The first one is plain SQL. [Alembic](https://alembic.sqlalchemy.org/) runs them and keeps in the database which one ran last, so none runs twice.
 - **The code reads and writes through [SQLAlchemy](https://www.sqlalchemy.org/),** which maps each table to a class: [tables.py](backend/src/book_teller/tables.py). Saving and reading a run is one file, [runs.py](backend/src/book_teller/runs.py). A test compares the classes with the tables that the migrations make.
 - **A container runs the migrations at its start,** before the app, when it is given the settings of a database: [start.py](backend/src/book_teller/start.py). If a migration fails, the new version does not start, and on Azure the old one keeps the visits.
 - **No password, anywhere.** The local database asks for none. The server on Azure takes only logins of Microsoft Entra: the app asks Azure for a token, as its managed identity, and sends it where a password would go. See [database.py](backend/src/book_teller/database.py).
 
-**Known limits.** On Azure the app is an administrator of its database, because it changes its own tables; a team would give it a smaller login and run the migrations with a second one. The connection to Azure is encrypted, but the server's certificate is not checked. A failed run is saved with a cost of 0.
+**Known limits.** On Azure the app is an administrator of its database, because it changes its own tables; a team would give it a smaller login and run the migrations with a second one. The connection to Azure is encrypted, but the server's certificate is not checked. A failed run that the script below saves has a cost of 0; a failed run from the page keeps the cost of the steps that answered.
 
 **To tell one chapter and save the run,** add `--save` to the command of "The steps of an episode", with the local database running and its three settings in `backend/.env`:
 
@@ -158,6 +157,45 @@ docker compose exec db psql -U postgres -d book_teller -c "SELECT id, status, to
 
 Why each choice was made, and what a second agent's review changed: [the plan of that task](docs/plans/2026-11-26-database/plan.md).
 
+## A run from the page
+
+The page has one form: the chapter, and the owner's key. The web app, [main.py](backend/src/book_teller/main.py), has two routes for it:
+
+| Route | What it does |
+|---|---|
+| `POST /runs` | Starts a run. It answers at once with the number of the run, with the status code 202, "accepted": the work is not done yet |
+| `GET /runs/{number}` | "How far?" The status of the run, and when it is done: the script, each fault with the guard's answer, and the sums of the tokens and the seconds |
+
+**The web app does the run itself, after the answer has left,** as a background task of FastAPI: a thread of the same program. The work is one function, `do_run` in [job.py](backend/src/book_teller/job.py), which knows nothing of the web. It saves the status after each step, so the page, which asks every two seconds, can show a progress line: waiting, writing, checking, done or failed.
+
+**Three guards stand in front of a run,** and each refuses before anything costs money:
+
+- **The owner's key:** a long random text, sent in the header `Authorization: Bearer …`. It stands in for a login until there is one. Both routes need it. With no key set up, the app refuses everybody (503); with a wrong key, 401. The two keys are compared in a way that takes the same time for a right and for a wrong one.
+- **The limit on the pasted text:** 5,000 words and 40,000 characters (422).
+- **The cap of the day:** at most 20 runs may start on one day of the clock UTC, counted from the rows of the day (429). A budget of Azure cannot do this: it only sends a notice, hours later.
+
+**Where the key is.** On Azure it rests in Azure Key Vault. The settings of the app hold only the address of that secret; Azure fetches the value with the app's managed identity and hands it to the container as an environment variable. Terraform makes the key at random, so nobody types it. In the browser, the page keeps the key for two days in `localStorage`, and forgets it when the app answers 401 or when "Forget the key" is pressed.
+
+**Known limits:**
+
+- **A run dies with the web app.** After a deploy or a crash in the middle of a run, the run stays "writing" or "checking" for ever. Azure also stops an idle app five minutes after its last request; an open page keeps asking, so it keeps the app alive. A queue and a worker are the next task.
+- The cap counts runs, not money. Two runs that start at the same moment can both pass it.
+- A request is read whole before the limit on the text is checked, and nothing limits the size of a request.
+- The key rests in the owner's browser, where a script that runs in the page could read it. So the page loads no script from anywhere, and it shows every text of the model as plain text, never as HTML; a test reads the page for that.
+- The key is also in Terraform's state file, on the maintainer's machine.
+- The script inside the page has no test of its own.
+
+**To make a run on your own machine,** start only the database with Docker Compose, and the web app on the machine itself, where your login to Azure is. Your `backend/.env` holds the settings of the model and of the database, and an owner's key that you make up. From the folder `backend`:
+
+```
+docker compose up --detach db
+uv run --env-file .env uvicorn book_teller.main:app --app-dir src --port 8000
+```
+
+Then open <http://localhost:8000>. A run makes two real calls: about one or two US cents.
+
+Why each choice was made: [the plan of that task](docs/plans/2026-11-27-run_without_queue/plan.md).
+
 ## How a change gets in
 
 Every change reaches `main` by a pull request. A pipeline, [azure-pipelines.yml](azure-pipelines.yml), runs on it, on a fresh machine in Azure Pipelines: the tests, the three checks, the build of the image, and the smoke test of that image. A ruleset on GitHub refuses the merge while a step fails, and refuses a push straight to `main`, also from the owner. The repository takes no pull requests from outside.
@@ -168,7 +206,9 @@ The pipeline runs in a private project of Azure DevOps, because Microsoft no lon
 
 ## The cloud
 
-The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password. And a database server, Azure Database for PostgreSQL, in its smallest size: it takes no password either, and its firewall lets only Azure's own services in.
+The cloud is one Terraform file, [infra/main.tf](infra/main.tf): a resource group, a container registry with no admin user, a log workspace with a daily cap, a managed identity for the app with the one role `AcrPull` on the registry, a Container Apps environment, and the app, with zero copies when nobody visits. So the app pulls its image with no password. And a database server, Azure Database for PostgreSQL, in its smallest size: it takes no password either, and its firewall lets only Azure's own services in. The same identity has one role on the model resource, so the app calls the model with no key. One secret exists, the owner's key: it rests in Azure Key Vault, where the identity may only read.
+
+The model resource itself is made by hand and is not in the file. What is the maintainer's own (the subscription, a sign-in name, the address of the model) comes from a file `terraform.tfvars` that git does not see.
 
 The maintainer runs Terraform from their own machine, with their own Azure login; the pipeline only checks the file. The state file, Terraform's record of what it made, stays on that machine and is never committed: it can hold secrets. Terraform leaves the image of the app to the pipeline.
 

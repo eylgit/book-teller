@@ -1,6 +1,6 @@
 # Task 9a: the run, without a queue
 
-**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". Nothing is built.
+**State:** planned on 2026-11-27. The maintainer answered the six questions on the same day: see "Decided by the maintainer". The app's code is built, and the cloud part is applied: see "What was seen". Not merged yet: the review by a second agent is next.
 
 It is the first half of task 9 of [milestone 1](../2026-11-14-milestone_1_the_whole_path_once/plan.md). Task 9 was split on 2026-11-27: this half makes the page work, and task 9b moves the run out of the web app, behind a queue.
 
@@ -203,6 +203,22 @@ Seen once by the maintainer: exit criteria 3 to 8. The script inside the page ha
 - **The key rests in the owner's browser** for two days: question 5. On a shared computer, the owner presses "Forget the key".
 - **A very large request** is read whole before the limit on the text is checked. Nothing limits the size of a request yet.
 - **The agent cannot reach a database, Docker or Azure.** The maintainer runs the tests of cases 1 to 17, the real runs and the apply, and the agent reads the output.
+
+## What was seen
+
+On 2026-11-27.
+
+**On the maintainer's machine.** All tests passed with the local database, and the new ones had failed first: four test files could not be loaded, because the names that they import did not exist. The maintainer made a real run from the page, with the web app started on the machine itself, and tried the wrong key.
+
+**Not as the plan said:**
+
+- The tests of the settings are in a file of their own, `test_settings.py`.
+- Two tests were written with the code, not before it: two keys are compared without an error when they hold a letter outside ASCII, and a database that cannot be reached answers 503 without its address.
+- The real "ask the model", `ask_with`, moved from `tell.py` to `job.py`, so that the web app does not load a script.
+- The subscription id is a variable of `main.tf` now, and every value of the maintainer's own is in one file, `infra/terraform.tfvars`. Before, two of them were variables of the shell that had to be set again in every new terminal.
+- Two older checks of the cloud tests were rewritten. "The app holds no secret" became "the app has one secret, with no value, that points to the vault". "Exactly five settings, none from a secret" became "seven plain settings, and one that names the secret".
+
+**On Azure.** The plan listed six things to add and one to change, and nothing to destroy. The apply made them at the first try, and a new plan said "No changes". The app got its new settings while it still ran the code of before this task, which does not read them.
 
 ## How it is undone
 

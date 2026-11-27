@@ -92,10 +92,12 @@ mock_provider "azurerm" {
 # text where the real one gives a random one.
 mock_provider "random" {}
 
-# The maintainer's own sign-in name is not in main.tf: it comes from the
-# shell. So do the three facts of the model resource, which was made by hand.
-# The tests hand in made-up ones.
+# What is the maintainer's own is not in main.tf: the subscription, the
+# sign-in name, and the three facts of the model resource, which was made by
+# hand. They come from a file that git does not see. The tests hand in
+# made-up ones.
 variables {
+  subscription_id     = "00000000-0000-0000-0000-000000000000"
   database_admin_name = "maintainer@example.invalid"
   model_resource_id   = "/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg-model/providers/Microsoft.CognitiveServices/accounts/model-test"
   model_endpoint      = "https://model-test.example.invalid/openai/v1/"
